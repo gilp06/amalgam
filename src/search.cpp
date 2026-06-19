@@ -178,16 +178,18 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
     }
 
     bool in_check = td.board.inCheck();
-    bool can_prune = !in_check && !is_root;
+    bool can_prune = !in_check && !is_root && !is_pv;
 
 
     if (can_prune) {
 
         // Null Move Pruning
-        if (depth >= 3 && !is_pv && static_eval + depth * 100 > beta &&
+        if (depth >= 3 && static_eval + depth * 100 > beta &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
             int reduction = 4.0 + depth / 3.0;
 
+            // we don't need to update the accumulators
+            // so we just copy them over to the next ply
             td.ss[ply+1].accums[0] = td.ss[ply].accums[0];
             td.ss[ply+1].accums[1] = td.ss[ply].accums[1];
 
@@ -200,7 +202,9 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
             }
         }
 
-
+        if(depth <= 3 && static_eval >= beta + 100 * depth) {
+            return beta + (static_eval - beta) / 4;
+        }
     }
 
 
