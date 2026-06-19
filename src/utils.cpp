@@ -19,7 +19,6 @@ void initLookup() {
                     BETWEEN_MASK[sq1][sq2] =
                         att(pt, sq1, Bitboard::fromSquare(sq2)) & att(pt, sq2, Bitboard::fromSquare(sq1));
                 }
-                // BETWEEN_MASK[sq1][sq2].set(sq2);
             }
         }
     }

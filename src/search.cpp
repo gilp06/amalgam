@@ -15,7 +15,7 @@ static const int INF = INT16_MAX;
 static const int THREAD_COUNT = 1;
 threaddata tds[THREAD_COUNT];
 
-void start_search(globalstate *gs, searchparams *params) {
+void startSearch(globalstate *gs, searchparams *params) {
     timemanager tm(*params, gs->board.sideToMove());
     gs->thread_stop = false;
 
@@ -24,7 +24,7 @@ void start_search(globalstate *gs, searchparams *params) {
     Accumulator initial_accums[2];
     initial_accums[0] = LOADED_NNUE->feature_biases;
     initial_accums[1] = LOADED_NNUE->feature_biases;
-    populate_accums(initial_accums, gs->board);
+    populateAccums(initial_accums, gs->board);
 
     for (int i = 0; i < THREAD_COUNT; i++) {
         tds[i].gs = gs;
@@ -59,7 +59,7 @@ void start_search(globalstate *gs, searchparams *params) {
 
 void search(threaddata &td) {
     int16_t cur_depth = 1;
-    while (1) {
+    while (true) {
         // clear PV lengths
         std::fill(td.pv_lengths, td.pv_lengths + MAX_PLY, 0);
 
@@ -70,32 +70,54 @@ void search(threaddata &td) {
 
         int16_t alpha = -INF;
         int16_t beta = INF;
+        int16_t delta = 10;
 
-        int16_t score = alphabeta<PV_NODE>(td, alpha, beta, cur_depth, 0);
-        if (check_status(td)) {
-            td.gs->thread_stop = true;
-            break;
+        while (true) {
+            if (cur_depth >= 5) {
+                alpha = td.score - delta;
+                beta = td.score + delta;
+            }
+
+            int16_t score = alphabeta<PV_NODE>(td, alpha, beta, cur_depth, 0);
+
+            if (checkStatus(td)) {
+                td.gs->thread_stop = true;
+                break;
+            }
+
+            if (score > alpha && score < beta) {
+                td.score = score;
+                cur_depth++;
+                td.best_move = td.pv[0][0];
+                if (td.pv_lengths[0] > 1)
+                    td.ponder = td.pv[0][1];
+                break;
+            }
+
+            if (score <= alpha) {
+                // std::cout << "a.w. fail low" << std::endl;
+                beta = (alpha + beta) / 2;
+                alpha = MAX(-INF, alpha - delta);
+            }
+            if (score >= beta) {
+                // std::cout << "a.w. fail high" << std::endl;
+                beta = MIN(INF, beta + delta);
+            }
+
+            delta = delta + delta / 2;
         }
 
-        cur_depth++;
-        if (td.worker)
-            continue;
-
-        td.best_move = td.pv[0][0];
-        if (td.pv_lengths[0] > 1) {
-            td.ponder = td.pv[0][1];
-        } else {
-            td.ponder = Move::NO_MOVE;
+        if (td.gs->thread_stop) {
+            break;
         }
 
         double time_spent = std::chrono::duration<double>(
                                 std::chrono::steady_clock::now() - td.tm->start)
                                 .count();
         std::cout << "info depth " << cur_depth - 1 << " seldepth "
-                  << td.seldepth << " score cp " << score << " nodes "
-                  << td.nodes << " time " << (int)(time_spent * 1000)
-                  << " nps " << (int)(td.nodes / time_spent)
-                  << " pv";
+                  << td.seldepth << " score cp " << td.score << " nodes "
+                  << td.nodes << " time " << (int)(time_spent * 1000) << " nps "
+                  << (int)(td.nodes / time_spent) << " pv";
         for (int i = 0; i < td.pv_lengths[0]; i++) {
             std::cout << " "
                       << uci::moveToUci(td.pv[0][i], td.board.chess960());
@@ -108,9 +130,11 @@ template <nodetype node>
 int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
                   int16_t ply) {
 
+    depth = MAX(0, depth);
     bool is_pv = (node == PV_NODE);
+    bool is_root = (ply == 0);
 
-    if (check_status(td)) {
+    if (checkStatus(td)) {
         td.gs->thread_stop = true;
         return 0;
     }
@@ -119,6 +143,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         return evaluate(td, ply);
     }
 
+    int16_t static_eval = evaluate(td, ply);
 
     int16_t alpha_orig = alpha;
     td.nodes++;
@@ -128,14 +153,9 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         td.seldepth = ply;
     }
 
-    if (td.board.isHalfMoveDraw() || td.board.isRepetition(2) || td.board.isInsufficientMaterial()) {
+    if (td.board.isHalfMoveDraw() || td.board.isRepetition(2) ||
+        td.board.isInsufficientMaterial()) {
         return 0;
-    }
-
-
-    if (depth == 0) {
-        return quiescence(td, alpha, beta, ply);
-        // return evaluate(td, ply);
     }
 
     std::optional<Move> tt_move = std::nullopt;
@@ -144,7 +164,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
 
     if (probe.has_value()) {
 
-        if (ply != 0 && probe->depth >= depth && (depth == 0 || !is_pv)) {
+        if (!is_root && probe->depth >= depth && (depth == 0 || !is_pv)) {
             if (probe->bd == TTable::EXACT) {
                 return probe->score;
             } else if (probe->bd == TTable::LOWER && probe->score >= beta) {
@@ -157,32 +177,66 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
             tt_move = probe->best_move;
     }
 
+    bool in_check = td.board.inCheck();
+    bool can_prune = !in_check && !is_root;
+
+
+    if (can_prune) {
+
+        // Null Move Pruning
+        if (depth >= 3 && !is_pv && static_eval + depth * 100 > beta &&
+            td.board.hasNonPawnMaterial(td.board.sideToMove())) {
+            int reduction = 4.0 + depth / 3.0;
+
+            td.ss[ply+1].accums[0] = td.ss[ply].accums[0];
+            td.ss[ply+1].accums[1] = td.ss[ply].accums[1];
+
+            td.board.makeNullMove();
+            int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1, depth - 1 - reduction, ply + 1);
+            td.board.unmakeNullMove();
+
+            if (score >= beta) {
+                return score;
+            }
+        }
+
+
+    }
+
+
+    if (depth == 0) {
+        return quiescence(td, alpha, beta, ply);
+    }
+
     int16_t best_score = INT16_MIN;
     size_t played = 0;
     MoveSelect ms(td.board, tt_move);
 
-    while(true) {
+    while (true) {
         Move m = ms.next();
-        if (ms.stage == MoveSelectStage::Done) break;
+        if (ms.stage == MoveSelectStage::Done)
+            break;
         assert(m != Move::NO_MOVE);
 
-        perform_move(td, m, &td.ss[ply]);
+        performMove(td, m, &td.ss[ply]);
         played++;
 
         int16_t score;
         if (played == 1) {
             score = -alphabeta<node>(td, -beta, -alpha, depth - 1, ply + 1);
         } else {
-            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1, ply + 1);
+            score =
+                -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1, ply + 1);
             if (score > alpha && score < beta) {
-                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
+                score =
+                    -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
             }
         }
         td.board.unmakeMove(m);
 
         if (score > best_score) {
             best_score = score;
-            best_move  = m;
+            best_move = m;
             if (score > alpha) {
                 alpha = score;
 
@@ -212,7 +266,10 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         entry.depth = depth;
         entry.best_move = best_move.move();
         entry.score = best_score;
-        entry.bd = best_score >= beta ? TTable::LOWER : (best_score <= alpha_orig ? TTable::UPPER : TTable::EXACT);
+        entry.bd =
+            best_score >= beta
+                ? TTable::LOWER
+                : (best_score <= alpha_orig ? TTable::UPPER : TTable::EXACT);
         entry.key = td.board.hash();
         td.gs->tt.store(entry);
     }
@@ -221,7 +278,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
 }
 
 int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
-    if (check_status(td)) {
+    if (checkStatus(td)) {
         td.gs->thread_stop = true;
         return 0;
     }
@@ -231,7 +288,6 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
     }
 
     td.nodes++;
-
 
     if (ply > td.seldepth) {
         td.seldepth = ply;
@@ -258,8 +314,6 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
             tt_move = probe->best_move;
     }
 
-
-
     int16_t best_score = INT16_MIN;
     bool incheck = td.board.inCheck();
     int16_t stand_pat = 0;
@@ -277,13 +331,14 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
     MoveSelect ms(td.board, tt_move, !incheck);
     int16_t played = 0;
 
-    while(true) {
+    while (true) {
         Move m = ms.next();
-        if (ms.stage == MoveSelectStage::Done) break;
+        if (ms.stage == MoveSelectStage::Done)
+            break;
         assert(m != Move::NO_MOVE);
         played++;
 
-        perform_move(td, m, &td.ss[ply]);
+        performMove(td, m, &td.ss[ply]);
         int16_t score = -quiescence(td, -beta, -alpha, ply + 1);
         td.board.unmakeMove(m);
 
@@ -305,15 +360,16 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
         }
     }
 
-
     TTable::Entry entry;
     entry.depth = 0;
     entry.score = best_score;
-    entry.bd = best_score >= beta ? TTable::LOWER : (best_score <= alpha_orig ? TTable::UPPER : TTable::EXACT);
-    entry.best_move = (entry.bd == TTable::UPPER) ? Move::NO_MOVE : best_move.move();
+    entry.bd = best_score >= beta
+                   ? TTable::LOWER
+                   : (best_score <= alpha_orig ? TTable::UPPER : TTable::EXACT);
+    entry.best_move =
+        (entry.bd == TTable::UPPER) ? Move::NO_MOVE : best_move.move();
     entry.key = td.board.hash();
     td.gs->tt.store(entry);
-
 
     return best_score;
 }
@@ -328,7 +384,7 @@ int16_t evaluate(threaddata &td, int16_t ply) {
     }
 }
 
-bool check_status(threaddata &td) {
+bool checkStatus(threaddata &td) {
     if (td.gs->thread_stop) {
         return true;
     }
@@ -339,9 +395,10 @@ bool check_status(threaddata &td) {
 
     if ((td.nodes & 2047) == 0) {
         if (td.tm->max_search_time != 0) {
-            double time_spent = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    std::chrono::steady_clock::now() - td.tm->start)
-                                    .count();
+            double time_spent =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - td.tm->start)
+                    .count();
             if (time_spent >= td.tm->max_search_time) {
                 return true;
             }
@@ -351,7 +408,7 @@ bool check_status(threaddata &td) {
     return false;
 }
 
-void perform_move(threaddata &td, Move move, sstack_data *ss) {
+void performMove(threaddata &td, Move move, sstack_data *ss) {
 
     (ss + 1)->accums[0] = ss->accums[0];
     (ss + 1)->accums[1] = ss->accums[1];

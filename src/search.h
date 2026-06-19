@@ -11,6 +11,7 @@
 
 enum nodetype {
     PV_NODE,
+    NULL_MOVE,
     NORMAL
 };
 
@@ -78,14 +79,15 @@ struct threaddata {
     chess::Move best_move, ponder;
 
     int16_t seldepth;
+    int16_t score;
 };
 
 
 
-bool check_status(threaddata& td);
-void start_search(globalstate* gs, searchparams* params);
+bool checkStatus(threaddata& td);
+void startSearch(globalstate* gs, searchparams* params);
 void search(threaddata& td);
-void perform_move(threaddata& td, chess::Move move, sstack_data* ss);
+void performMove(threaddata& td, chess::Move move, sstack_data* ss);
 int16_t evaluate(threaddata& td, int16_t ply);
 
 template<nodetype node>

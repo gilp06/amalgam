@@ -19,7 +19,7 @@ int main() {
     };
 
     while(!done) {
-        done = uci_loop(&gs);
+        done = UCILoop(&gs);
     }
 
     return 0;

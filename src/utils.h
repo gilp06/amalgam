@@ -6,6 +6,10 @@
 
 #include "nnue.h"
 
+
+#define MAX(x,y) ((x) > (y) ? (x) : (y))
+#define MIN(x,y) ((x) < (y) ? (x) : (y))
+
 inline uint64_t perft(chess::Board& board, int depth) {
     chess::Movelist moves;
     chess::movegen::legalmoves(moves, board);
@@ -67,7 +71,7 @@ inline int calculate_nnue_index(chess::Color perspective, chess::Square sq, ches
     return side * 64 * 6 + piece.type() * 64 + square;
 }
 
-inline void populate_accums(Accumulator accums[2], const chess::Board& board) {
+inline void populateAccums(Accumulator accums[2], const chess::Board& board) {
 
     for (int i = 0; i < 64; i++) {
         chess::Piece piece_at = board.at(i);

@@ -11,7 +11,7 @@
 searchparams params = {};
 std::thread search_thread;
 
-bool uci_loop(globalstate* gs) {
+bool UCILoop(globalstate* gs) {
 
     std::string input;
     std::cin.clear();
@@ -117,7 +117,7 @@ bool uci_loop(globalstate* gs) {
             }
         }
 
-        search_thread = std::thread(start_search, gs, &params);
+        search_thread = std::thread(startSearch, gs, &params);
         search_thread.detach();
 
         return false;
@@ -139,7 +139,7 @@ bool uci_loop(globalstate* gs) {
             toks >> opt_name;
 
             if (toks >> token && token == "value") {
-                    update_uci_opts(gs, opt_name, toks);
+                    updateUCIOpts(gs, opt_name, toks);
                     return false;
             }
         }
@@ -151,7 +151,7 @@ bool uci_loop(globalstate* gs) {
 }
 
 
-void update_uci_opts(globalstate* gs, const std::string &opt_name, std::istringstream &remaining) {
+void updateUCIOpts(globalstate* gs, const std::string &opt_name, std::istringstream &remaining) {
     if (opt_name == "Hash") {
         int size;
         remaining >> size;
