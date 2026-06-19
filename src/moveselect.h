@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include "chess.hpp"
+#include <chess.hpp>
 #include "utils.h"
 enum MoveSelectStage {
     TTMove,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "chess.hpp"
+#include <chess.hpp>
 #include "nnue.h"
 #include "types.h"
 #include <chrono>
