@@ -4,6 +4,7 @@
 #include <chrono>
 #include <optional>
 #include <array>
+#include <cmath>
 using namespace chess;
 
 #include "search.h"
@@ -225,12 +226,41 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
             break;
         assert(m != Move::NO_MOVE);
 
+        bool is_checking = td.board.givesCheck(m) != CheckType::NO_CHECK;
+
         performMove(td, m, &td.ss[ply]);
         played++;
+
+
+        int reductions = 0;
+
+        // Late Move Pruning
+        if (played > 1) {
+            if (played >= 3 && depth >= 3 && !in_check && !is_checking && !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
+                if (!is_capture) {
+                    reductions += (int16_t)(0.8 + log(played) * log(depth) / 2.5);
+                } else {
+                    reductions += (int16_t)(0.4 + log(played) * log(depth) / 3.5);
+                }
+            }
+        }
+
+
 
         int16_t score;
         if (played == 1) {
             score = -alphabeta<node>(td, -beta, -alpha, depth - 1, ply + 1);
+        } else if(reductions != 0) {
+            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1 - reductions, ply + 1);
+
+            if (score > alpha && reductions > 0) {
+                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1, ply + 1);
+            }
+
+            if (score > alpha && score < beta) {
+                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
+            }
+
         } else {
             score =
                 -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1, ply + 1);
