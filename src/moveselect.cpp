@@ -222,6 +222,12 @@ Move MoveSelect::next() {
 
         // std::cout << "Bad Captures" << std::endl;
         // potentially rescore here
+
+        for (size_t i = index; i < moves.size(); i++) {
+            moves[i].setScore(MVVValues[board.at(moves[i].to()).type()][board.at(moves[i].from()).type()]);
+        }
+
+
         while(index < moves.size()) {
             size_t best_index = index;
 
