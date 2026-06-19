@@ -20,12 +20,13 @@ class MoveSelect {
         size_t index;
         size_t quiet_index;
         std::optional<chess::Move> ttMove;
+        std::optional<std::array<chess::Move, 2>> killers;
         const chess::Board& board;
         bool skipQuiets;
         PinnersBlockersStruct pb[2];
     public:
         MoveSelectStage stage;
-        MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, bool skipQuiets = false);
+        MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt);
         chess::Move next();
 };
 

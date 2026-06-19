@@ -3,6 +3,7 @@
 #include <chess.hpp>
 #include <chrono>
 #include <optional>
+#include <array>
 using namespace chess;
 
 #include "search.h"
@@ -202,6 +203,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
             }
         }
 
+        // Reverse Futility Pruning
         if(depth <= 3 && static_eval >= beta + 100 * depth) {
             return beta + (static_eval - beta) / 4;
         }
@@ -213,11 +215,12 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
     }
 
     int16_t best_score = INT16_MIN;
-    size_t played = 0;
-    MoveSelect ms(td.board, tt_move);
+    size_t played = 0;;
+    MoveSelect ms(td.board, tt_move, false, td.killers[ply]);
 
     while (true) {
         Move m = ms.next();
+        bool is_capture = td.board.isCapture(m);
         if (ms.stage == MoveSelectStage::Done)
             break;
         assert(m != Move::NO_MOVE);
@@ -251,6 +254,13 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
                 td.pv_lengths[ply] = td.pv_lengths[ply + 1] + 1;
 
                 if (alpha >= beta) {
+                    if(!is_capture) {
+                        if (td.killers[ply][0] != m) {
+                            td.killers[ply][1] = td.killers[ply][0];
+                            td.killers[ply][0] = m;
+                        }
+                    }
+
                     break;
                 }
             }

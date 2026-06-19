@@ -74,6 +74,7 @@ struct threaddata {
     int64_t nodes;
     sstack_data ss[MAX_PLY];
     chess::Move pv[MAX_PLY][MAX_PLY];
+    std::array<std::array<chess::Move, 2>, MAX_PLY> killers;
     int16_t pv_lengths[MAX_PLY];
 
     chess::Move best_move, ponder;

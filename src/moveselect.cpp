@@ -2,6 +2,7 @@
 #include "chess.hpp"
 #include "utils.h"
 #include <cassert>
+#include <optional>
 
 using namespace chess;
 
@@ -113,7 +114,7 @@ bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
     return result;
 }
 
-MoveSelect::MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, bool skipQuiets) : board(board), skipQuiets(skipQuiets), ttMove(ttMove) {
+MoveSelect::MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, bool skipQuiets, std::optional<std::array<chess::Move, 2>> killers) : board(board), skipQuiets(skipQuiets), ttMove(ttMove), killers(killers) {
     // cache pinners and blockers for SEE
     pb[(int)Color::WHITE] = fetchPinnersBlockers(board, Color::WHITE);
     pb[(int)Color::BLACK] = fetchPinnersBlockers(board, Color::BLACK);
@@ -185,6 +186,17 @@ Move MoveSelect::next() {
         // std::cout << "Gen Quiets" << std::endl;
         movegen::legalmoves<movegen::MoveGenType::QUIET>(quietMoves, board);
         stage = MoveSelectStage::Quiets;
+
+        for (size_t i = 0; i < quietMoves.size(); i++) {
+            if (killers.has_value()) {
+                if (quietMoves[i] == (*killers)[0]) {
+                    quietMoves[i].setScore(1000);
+                } else if (quietMoves[i] == (*killers)[1]) {
+                    quietMoves[i].setScore(999);
+                }
+            }
+        }
+
     }
 
     if (stage == MoveSelectStage::Quiets) {
