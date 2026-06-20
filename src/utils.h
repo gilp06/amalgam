@@ -9,6 +9,7 @@
 
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
+#define CLAMP(x, low, high) ((x) < (low) ? (low) : ((x) > (high) ? (high) : (x)))
 
 inline uint64_t perft(chess::Board& board, int depth) {
     chess::Movelist moves;

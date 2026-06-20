@@ -62,8 +62,9 @@ void startSearch(globalstate *gs, searchparams *params) {
 void search(threaddata &td) {
     int16_t cur_depth = 1;
     while (true) {
-        // clear PV lengths
+        // clear PV lengths and history heuristic
         std::fill(td.pv_lengths, td.pv_lengths + MAX_PLY, 0);
+        td.history_heuristic = HistoryHeuristicTable();
 
         if (td.tm->max_depth != 0 && cur_depth > td.tm->max_depth) {
             td.gs->thread_stop = true;
@@ -217,15 +218,17 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
 
     int16_t best_score = INT16_MIN;
     size_t played = 0;;
-    MoveSelect ms(td.board, tt_move, false, td.killers[ply]);
+    MoveSelect ms(td.board, tt_move, &td.history_heuristic, false, td.killers[ply]);
+    std::array<Move, 256> quietMoves;
+    size_t quietCount = 0;
 
     while (true) {
         Move m = ms.next();
-        bool is_capture = td.board.isCapture(m);
         if (ms.stage == MoveSelectStage::Done)
             break;
         assert(m != Move::NO_MOVE);
 
+        bool is_capture = td.board.isCapture(m);
         bool is_checking = td.board.givesCheck(m) != CheckType::NO_CHECK;
 
         performMove(td, m, &td.ss[ply]);
@@ -271,6 +274,10 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         }
         td.board.unmakeMove(m);
 
+        if(!is_capture) {
+            quietMoves[quietCount++] = m;
+        }
+
         if (score > best_score) {
             best_score = score;
             best_move = m;
@@ -289,6 +296,17 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
                             td.killers[ply][1] = td.killers[ply][0];
                             td.killers[ply][0] = m;
                         }
+
+
+                        int16_t bonus = 300 * depth - 250;
+                        UpdateHistoryHeuristic(td.history_heuristic, td.board.sideToMove(), m, bonus);
+
+                        for (size_t i = 0; i < quietCount; i++) {
+                            if (quietMoves[i] != m) {
+                                UpdateHistoryHeuristic(td.history_heuristic, td.board.sideToMove(), quietMoves[i], -bonus);
+                            }
+                        }
+
                     }
 
                     break;
@@ -372,7 +390,7 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
         }
     }
 
-    MoveSelect ms(td.board, tt_move, !incheck);
+    MoveSelect ms(td.board, tt_move, nullptr, !incheck);
     int16_t played = 0;
 
     while (true) {
@@ -381,6 +399,7 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
             break;
         assert(m != Move::NO_MOVE);
         played++;
+
 
         performMove(td, m, &td.ss[ply]);
         int16_t score = -quiescence(td, -beta, -alpha, ply + 1);

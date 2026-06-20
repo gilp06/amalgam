@@ -3,6 +3,7 @@
 #include <chess.hpp>
 #include "nnue.h"
 #include "types.h"
+#include "moveselect.h"
 #include <chrono>
 #include <cstdint>
 
@@ -67,7 +68,7 @@ struct sstack_data {
 
 struct threaddata {
     bool worker;
-
+    HistoryHeuristicTable history_heuristic;
     globalstate* gs;
     const timemanager* tm;
     chess::Board board;

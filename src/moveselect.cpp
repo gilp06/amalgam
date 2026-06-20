@@ -12,20 +12,25 @@ const static int16_t SEEBishop = 820;
 const static int16_t SEERook = 1270;
 const static int16_t SEEQueen = 2500;
 
-const static int16_t SEEPieceValues[14] = {
+const int16_t SEEPieceValues[14] = {
     SEEPawn,   SEEKnight, SEEBishop, SEERook,  SEEQueen, 0, SEEPawn,
     SEEKnight, SEEBishop, SEERook,   SEEQueen, 0,        0};
 
 // victim piece type (row) vs attacker piece type (column)
-const static int16_t MVVValues[7][7] = {
-    10, 11, 12, 13, 14, 15, 0,
-    20, 21, 22, 23, 24, 25, 0,
-    30, 31, 32, 33, 34, 35, 0,
-    40, 41, 42, 43, 44, 45, 0,
-    50, 51, 52, 53, 54, 55, 0,
-    60, 61, 62, 63, 64, 65, 0,
-    0, 0, 0, 0, 0, 0, 0
-};
+const int16_t MVVValues[7][7] = {
+    10, 11, 12, 13, 14, 15, 0,  20, 21, 22, 23, 24, 25, 0,  30, 31, 32,
+    33, 34, 35, 0,  40, 41, 42, 43, 44, 45, 0,  50, 51, 52, 53, 54, 55,
+    0,  60, 61, 62, 63, 64, 65, 0,  0,  0,  0,  0,  0,  0,  0};
+
+void UpdateHistoryHeuristic(HistoryHeuristicTable &historyHeuristic,
+                            chess::Color stm, chess::Move move,
+                            int16_t bonus) {
+    int16_t clampedBonus = CLAMP(bonus, -MAX_HISTORY, MAX_HISTORY);
+    int16_t currentValue =
+        historyHeuristic[(int)stm][move.from().index()][move.to().index()];
+    historyHeuristic[(int)stm][move.from().index()][move.to().index()] +=
+        clampedBonus - currentValue * abs(clampedBonus) / MAX_HISTORY;
+}
 
 bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
                                int16_t threshold, PinnersBlockersStruct pb[2]) {
@@ -113,8 +118,13 @@ bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
 
     return result;
 }
-
-MoveSelect::MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, bool skipQuiets, std::optional<std::array<chess::Move, 2>> killers) : board(board), skipQuiets(skipQuiets), ttMove(ttMove), killers(killers) {
+MoveSelect::MoveSelect(const chess::Board &board,
+                       std::optional<chess::Move> ttMove,
+                       const HistoryHeuristicTable *historyHeuristic,
+                       bool skipQuiets,
+                       std::optional<std::array<chess::Move, 2>> killers)
+    : board(board), skipQuiets(skipQuiets), ttMove(ttMove), killers(killers),
+      historyHeuristic(historyHeuristic) {
     // cache pinners and blockers for SEE
     pb[(int)Color::WHITE] = fetchPinnersBlockers(board, Color::WHITE);
     pb[(int)Color::BLACK] = fetchPinnersBlockers(board, Color::BLACK);
@@ -128,7 +138,6 @@ MoveSelect::MoveSelect(const chess::Board& board, std::optional<chess::Move> ttM
     index = 0;
     quiet_index = 0;
 }
-
 
 Move MoveSelect::next() {
 
@@ -153,14 +162,15 @@ Move MoveSelect::next() {
                 // give bad score, we will rescore later
                 moves[i].setScore(-1);
             } else {
-                moves[i].setScore(MVVValues[board.at(moves[i].to()).type()][board.at(moves[i].from()).type()]);
+                moves[i].setScore(MVVValues[board.at(moves[i].to()).type()]
+                                           [board.at(moves[i].from()).type()]);
             }
         }
     }
 
     if (stage == MoveSelectStage::GoodCaptures) {
         // std::cout << "Good Captures" << std::endl;
-        while(index < moves.size()) {
+        while (index < moves.size()) {
             size_t best_index = index;
 
             for (size_t i = index + 1; i < moves.size(); i++) {
@@ -175,11 +185,12 @@ Move MoveSelect::next() {
             } else {
                 std::swap(moves[index], moves[best_index]);
                 index++;
-                if (ttMove.has_value() && moves[index - 1] == ttMove.value()) continue;
+                if (ttMove.has_value() && moves[index - 1] == ttMove.value())
+                    continue;
                 return moves[index - 1];
             }
         }
-        stage = skipQuiets ? BadCaptures:MoveSelectStage::GenQuiets;
+        stage = skipQuiets ? BadCaptures : MoveSelectStage::GenQuiets;
     }
 
     if (stage == MoveSelectStage::GenQuiets) {
@@ -188,15 +199,19 @@ Move MoveSelect::next() {
         stage = MoveSelectStage::Quiets;
 
         for (size_t i = 0; i < quietMoves.size(); i++) {
+            if (historyHeuristic != nullptr)
+                quietMoves[i].setScore(
+                    (*historyHeuristic)[board.sideToMove()]
+                                       [quietMoves[i].from().index()]
+                                       [quietMoves[i].to().index()]);
             if (killers.has_value()) {
                 if (quietMoves[i] == (*killers)[0]) {
-                    quietMoves[i].setScore(1000);
+                    quietMoves[i].setScore(27000);
                 } else if (quietMoves[i] == (*killers)[1]) {
-                    quietMoves[i].setScore(999);
+                    quietMoves[i].setScore(26000);
                 }
             }
         }
-
     }
 
     if (stage == MoveSelectStage::Quiets) {
@@ -211,7 +226,9 @@ Move MoveSelect::next() {
 
             std::swap(quietMoves[quiet_index], quietMoves[best_index]);
             quiet_index++;
-            if (ttMove.has_value() && quietMoves[quiet_index - 1] == ttMove.value()) continue;
+            if (ttMove.has_value() &&
+                quietMoves[quiet_index - 1] == ttMove.value())
+                continue;
             return quietMoves[quiet_index - 1];
         }
 
@@ -224,11 +241,11 @@ Move MoveSelect::next() {
         // potentially rescore here
 
         for (size_t i = index; i < moves.size(); i++) {
-            moves[i].setScore(MVVValues[board.at(moves[i].to()).type()][board.at(moves[i].from()).type()]);
+            moves[i].setScore(MVVValues[board.at(moves[i].to()).type()]
+                                       [board.at(moves[i].from()).type()]);
         }
 
-
-        while(index < moves.size()) {
+        while (index < moves.size()) {
             size_t best_index = index;
 
             for (size_t i = index + 1; i < moves.size(); i++) {
@@ -239,7 +256,8 @@ Move MoveSelect::next() {
 
             std::swap(moves[index], moves[best_index]);
             index++;
-            if (ttMove.has_value() && moves[index - 1] == ttMove.value()) continue;
+            if (ttMove.has_value() && moves[index - 1] == ttMove.value())
+                continue;
             return moves[index - 1];
         }
         stage = MoveSelectStage::Done;
@@ -249,7 +267,6 @@ Move MoveSelect::next() {
         // std::cout << "Done" << std::endl;
         return Move::NO_MOVE;
     }
-
 
     stage = MoveSelectStage::Done;
     return Move::NO_MOVE;
