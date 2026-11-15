@@ -1,6 +1,8 @@
 #pragma once
 
+#define CHESS_USE_PEXT
 #include <chess.hpp>
+
 #include <cstdint>
 #include <chrono>
 

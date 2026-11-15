@@ -32,13 +32,25 @@ struct timemanager {
     uint64_t max_search_time = 0;
     uint64_t max_nodes = 0;
     uint64_t max_depth = 0;
+    uint64_t node_batch_size = 256;
 
-    explicit timemanager(const searchparams& params, chess::Color stm) {
+    explicit timemanager(const searchparams& params, chess::Color stm,
+                         uint64_t thread_count = 1) {
         start = std::chrono::steady_clock::now();
         if (params.max_depth != 0)
             max_depth = params.max_depth;
         if (params.max_nodes != 0)
             max_nodes = params.max_nodes;
+        if (max_nodes != 0) {
+            uint64_t target_batch = max_nodes / (thread_count * 4);
+            if (target_batch == 0)
+                target_batch = 1;
+            node_batch_size = 1;
+            while (node_batch_size < 256 &&
+                   node_batch_size * 2 <= target_batch) {
+                node_batch_size *= 2;
+            }
+        }
 
         uint64_t time_left;
         uint64_t increment;
@@ -87,8 +99,9 @@ struct threaddata {
 
 
 bool checkStatus(threaddata& td);
+bool countNode(threaddata& td);
 void startSearch(globalstate* gs, searchparams* params);
-void search(threaddata& td);
+void search(std::reference_wrapper<threaddata> td, bool main);
 void performMove(threaddata& td, chess::Move move, sstack_data* ss);
 int16_t evaluate(threaddata& td, int16_t ply);
 

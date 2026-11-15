@@ -1,5 +1,7 @@
-#include "moveselect.h"
+#define CHESS_USE_PEXT
 #include "chess.hpp"
+
+#include "moveselect.h"
 #include "utils.h"
 #include <cassert>
 #include <optional>

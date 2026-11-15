@@ -1,15 +1,25 @@
+#define CHESS_USE_PEXT
+#include "chess.hpp"
+
 #include <sstream>
 #include <string>
 #include <cstdint>
 #include <thread>
 #include "uci.h"
-#include "chess.hpp"
+
 #include "utils.h"
 #include "types.h"
 #include "search.h"
 
 searchparams params = {};
 std::thread search_thread;
+
+static void stopSearch(globalstate* gs) {
+    if (search_thread.joinable()) {
+        gs->thread_stop.store(true, std::memory_order_relaxed);
+        search_thread.join();
+    }
+}
 
 bool UCILoop(globalstate* gs) {
 
@@ -26,6 +36,7 @@ bool UCILoop(globalstate* gs) {
         std::cout << "id name amalgam 1.0\n";
         std::cout << "id author gilp06\n";
         std::cout << "option name Hash type spin default 16 min 1 max 1024\n";
+        std::cout << "option name Threads type spin default 1 min 1 max 256\n";
         std::cout << "option name UCI_Chess960 type check default false\n";
         std::cout << "uciok\n";
         return false;
@@ -37,12 +48,14 @@ bool UCILoop(globalstate* gs) {
     }
 
     if(token == "ucinewgame") {
+        stopSearch(gs);
         // we should just clear the hash here
         gs->tt.clear();
         return false;
     }
 
     if(token == "position") {
+        stopSearch(gs);
         toks >> token;
         if(token == "startpos") {
             gs->board = chess::Board();
@@ -83,6 +96,7 @@ bool UCILoop(globalstate* gs) {
     }
 
     if(token == "go") {
+        stopSearch(gs);
 
         params = {};
 
@@ -117,18 +131,20 @@ bool UCILoop(globalstate* gs) {
             }
         }
 
+        gs->thread_stop.store(false, std::memory_order_relaxed);
         search_thread = std::thread(startSearch, gs, &params);
-        search_thread.detach();
 
         return false;
     }
 
     if(token == "stop") {
-        gs->thread_stop = true;
+        gs->thread_stop.store(true, std::memory_order_relaxed);
+        stopSearch(gs);
         return false;
     }
 
     if(token == "quit") {
+        stopSearch(gs);
         return true;
     }
 
@@ -152,12 +168,22 @@ bool UCILoop(globalstate* gs) {
 
 
 void updateUCIOpts(globalstate* gs, const std::string &opt_name, std::istringstream &remaining) {
+    stopSearch(gs);
+
     if (opt_name == "Hash") {
         int size;
         remaining >> size;
         if (size < 1) size = 1;
         if (size > 1024) size = 1024;
         gs->tt.resize(size);
+    }
+
+    if (opt_name == "Threads") {
+        int threads;
+        remaining >> threads;
+        if (threads < 1) threads = 1;
+        if (threads > 256) threads = 256;
+        gs->num_threads = threads;
     }
 
     if (opt_name == "UCI_Chess960") {

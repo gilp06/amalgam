@@ -1,3 +1,4 @@
+#define CHESS_USE_PEXT
 #include <chess.hpp>
 #include "utils.h"
 #include "types.h"
@@ -10,11 +11,13 @@ int main() {
 
     bool done = false;
 
-    TTable table(128); // default size of 16 MB
+    TTable table(1024); // default size of 16 MB
     globalstate gs = {
         chess::Board(),
         true,
+        0,
         true,
+        4,
         table,
     };
 
