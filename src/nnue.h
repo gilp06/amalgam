@@ -45,15 +45,45 @@ public:
     return y * y;
   }
 
-  static inline void accum_add_feat(size_t index, Accumulator &accum) {
+  static inline void accum_add_feat(int16_t *inputs, int16_t *outputs, size_t index) {
+    
+    auto buff = LOADED_NNUE->feature_weights[index].values;
     for (int i = 0; i < HIDDEN_SIZE; i++) {
-      accum.values[i] += LOADED_NNUE->feature_weights[index].values[i];
+      outputs[i] = inputs[i] + buff[i];
     }
   }
 
-  static inline void accum_remove_feat(size_t index, Accumulator &accum) {
+  static inline void accum_remove_feat(int16_t *inputs, int16_t *outputs, size_t index) {
+    auto buff = LOADED_NNUE->feature_weights[index].values;
     for (int i = 0; i < HIDDEN_SIZE; i++) {
-      accum.values[i] -= LOADED_NNUE->feature_weights[index].values[i];
+      outputs[i] = inputs[i] - buff[i];
+    }
+  }
+
+  static inline void accum_add_sub_feats(int16_t *inputs, int16_t *outputs, size_t add_index, size_t sub_index) {
+    auto buff_add = LOADED_NNUE->feature_weights[add_index].values;
+    auto buff_sub = LOADED_NNUE->feature_weights[sub_index].values;
+    for (int i = 0; i < HIDDEN_SIZE; i++) {
+      outputs[i] = inputs[i] + buff_add[i] - buff_sub[i];
+    }
+  }
+
+  static inline void accum_add_sub2_feats(int16_t *inputs, int16_t *outputs, size_t add_index, size_t sub1_index, size_t sub2_index) {
+    auto buff_add = LOADED_NNUE->feature_weights[add_index].values;
+    auto buff_sub1 = LOADED_NNUE->feature_weights[sub1_index].values;
+    auto buff_sub2 = LOADED_NNUE->feature_weights[sub2_index].values;
+    for (int i = 0; i < HIDDEN_SIZE; i++) {
+      outputs[i] = inputs[i] + buff_add[i] - buff_sub1[i] - buff_sub2[i];
+    }
+  }
+
+  static inline void accum_add2_sub2_feats(int16_t *inputs, int16_t *outputs, size_t add1_index, size_t add2_index, size_t sub1_index, size_t sub2_index) {
+    auto buff_add1 = LOADED_NNUE->feature_weights[add1_index].values;
+    auto buff_add2 = LOADED_NNUE->feature_weights[add2_index].values;
+    auto buff_sub1 = LOADED_NNUE->feature_weights[sub1_index].values;
+    auto buff_sub2 = LOADED_NNUE->feature_weights[sub2_index].values;
+    for (int i = 0; i < HIDDEN_SIZE; i++) {
+      outputs[i] = inputs[i] + buff_add1[i] + buff_add2[i] - buff_sub1[i] - buff_sub2[i];
     }
   }
 

@@ -11,7 +11,7 @@ int main() {
 
     bool done = false;
 
-    TTable table(1024); // default size of 16 MB
+    TTable table(1024);
     globalstate gs = {
         chess::Board(),
         true,

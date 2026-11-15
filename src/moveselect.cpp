@@ -127,10 +127,13 @@ MoveSelect::MoveSelect(const chess::Board &board,
                        std::optional<std::array<chess::Move, 2>> killers)
     : board(board), skipQuiets(skipQuiets), ttMove(ttMove), killers(killers),
       historyHeuristic(historyHeuristic) {
+
     // cache pinners and blockers for SEE
     pb[(int)Color::WHITE] = fetchPinnersBlockers(board, Color::WHITE);
     pb[(int)Color::BLACK] = fetchPinnersBlockers(board, Color::BLACK);
 
+
+    // skip TT move stage if it doesn't exist
     if (!ttMove.has_value()) {
         stage = MoveSelectStage::GenCaptures;
     } else {

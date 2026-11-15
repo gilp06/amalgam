@@ -5,12 +5,10 @@
 #include "moveselect.h"
 #include "ttable.h"
 
-
-
-#include <chrono>
-#include <optional>
 #include <array>
+#include <chrono>
 #include <cmath>
+#include <optional>
 #include <thread>
 
 using namespace chess;
@@ -24,7 +22,6 @@ static const int INF = INT16_MAX;
 
 std::vector<threaddata> tds;
 
-    
 void startSearch(globalstate *gs, searchparams *params) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
@@ -138,18 +135,19 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main) {
         }
 
         if (main) {
-            double time_spent = std::chrono::duration<double>(
-                                    std::chrono::steady_clock::now() - td.tm->start)
-                                    .count();
+            double time_spent =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                              td.tm->start)
+                    .count();
             uint64_t nodes =
                 td.gs->nodes_searched.load(std::memory_order_relaxed);
             std::cout << "info depth " << cur_depth - 1 << " seldepth "
-                    << td.seldepth << " score cp " << td.score << " nodes "
-                    << nodes << " time " << (int)(time_spent * 1000) << " nps "
-                    << (int)(nodes / time_spent) << " pv";
+                      << td.seldepth << " score cp " << td.score << " nodes "
+                      << nodes << " time " << (int)(time_spent * 1000)
+                      << " nps " << (int)(nodes / time_spent) << " pv";
             for (int i = 0; i < td.pv_lengths[0]; i++) {
                 std::cout << " "
-                        << uci::moveToUci(td.pv[0][i], td.board.chess960());
+                          << uci::moveToUci(td.pv[0][i], td.board.chess960());
             }
             std::cout << std::endl;
         }
@@ -209,7 +207,6 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
     bool in_check = td.board.inCheck();
     bool can_prune = !in_check && !is_root && !is_pv;
 
-
     if (can_prune) {
 
         // Null Move Pruning
@@ -219,13 +216,15 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
 
             // we don't need to update the accumulators
             // so we just copy them over to the next ply
-            td.ss[ply+1].accums[0] = td.ss[ply].accums[0];
-            td.ss[ply+1].accums[1] = td.ss[ply].accums[1];
+            td.ss[ply + 1].accums[0] = td.ss[ply].accums[0];
+            td.ss[ply + 1].accums[1] = td.ss[ply].accums[1];
 
             td.board.makeNullMove();
-            int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1, depth - 1 - reduction, ply + 1);
+            int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1,
+                                               depth - 1 - reduction, ply + 1);
             td.board.unmakeNullMove();
 
+            // If we need to abort
             if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
                 return 0;
             }
@@ -236,19 +235,20 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         }
 
         // Reverse Futility Pruning
-        if(depth <= 3 && static_eval >= beta + 100 * depth) {
+        if (depth <= 3 && static_eval >= beta + 100 * depth) {
             return beta + (static_eval - beta) / 4;
         }
     }
-
 
     if (depth == 0) {
         return quiescence(td, alpha, beta, ply);
     }
 
     int16_t best_score = INT16_MIN;
-    size_t played = 0;;
-    MoveSelect ms(td.board, tt_move, &td.history_heuristic, false, td.killers[ply]);
+    size_t played = 0;
+    ;
+    MoveSelect ms(td.board, tt_move, &td.history_heuristic, false,
+                  td.killers[ply]);
     std::array<Move, 256> quietMoves;
     size_t quietCount = 0;
 
@@ -259,9 +259,10 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         assert(m != Move::NO_MOVE);
 
         bool is_capture = td.board.isCapture(m);
+        bool is_quiet = !is_capture && m.typeOf() != Move::PROMOTION;
         bool is_checking = td.board.givesCheck(m) != CheckType::NO_CHECK;
 
-        if(!is_capture) {
+        if (is_quiet) {
             quietMoves[quietCount++] = m;
         }
 
@@ -269,16 +270,19 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
 
         // Late Move Reductions
         if (played > 1) {
-            if (played >= 3 && depth >= 3 && !in_check && !is_checking && !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
-                if (!is_capture) {
-                    reductions += (int16_t)(0.8 + log(played) * log(depth) / 2.5);
+            if (played >= 3 && depth >= 3 && !in_check && !is_checking &&
+                !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
+                if (is_quiet) {
+                    reductions +=
+                        (int16_t)(0.8 + log(played) * log(depth) / 2.5);
                 } else {
-                    reductions += (int16_t)(0.4 + log(played) * log(depth) / 3.5);
+                    reductions +=
+                        (int16_t)(0.4 + log(played) * log(depth) / 3.5);
                 }
             }
         }
 
-
+        
 
         performMove(td, m, &td.ss[ply]);
         played++;
@@ -286,15 +290,18 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         int16_t score;
         if (played == 1) {
             score = -alphabeta<node>(td, -beta, -alpha, depth - 1, ply + 1);
-        } else if(reductions != 0) {
-            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1 - reductions, ply + 1);
+        } else if (reductions != 0) {
+            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha,
+                                       depth - 1 - reductions, ply + 1);
 
             if (score > alpha && reductions > 0) {
-                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1, ply + 1);
+                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1,
+                                           ply + 1);
             }
 
             if (score > alpha && score < beta) {
-                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
+                score =
+                    -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
             }
 
         } else {
@@ -307,6 +314,8 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         }
         td.board.unmakeMove(m);
 
+        
+        // Early exit check
         if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
             return 0;
         }
@@ -324,22 +333,23 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
                 td.pv_lengths[ply] = td.pv_lengths[ply + 1] + 1;
 
                 if (alpha >= beta) {
-                    if(!is_capture) {
+                    if (is_quiet) {
                         if (td.killers[ply][0] != m) {
                             td.killers[ply][1] = td.killers[ply][0];
                             td.killers[ply][0] = m;
                         }
 
-
                         int16_t bonus = 300 * depth - 250;
-                        UpdateHistoryHeuristic(td.history_heuristic, td.board.sideToMove(), m, bonus);
+                        UpdateHistoryHeuristic(td.history_heuristic,
+                                               td.board.sideToMove(), m, bonus);
 
                         for (size_t i = 0; i < quietCount; i++) {
                             if (quietMoves[i] != m) {
-                                UpdateHistoryHeuristic(td.history_heuristic, td.board.sideToMove(), quietMoves[i], -bonus);
+                                UpdateHistoryHeuristic(td.history_heuristic,
+                                                       td.board.sideToMove(),
+                                                       quietMoves[i], -bonus);
                             }
                         }
-
                     }
 
                     break;
@@ -433,7 +443,6 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
         assert(m != Move::NO_MOVE);
         played++;
 
-
         performMove(td, m, &td.ss[ply]);
         int16_t score = -quiescence(td, -beta, -alpha, ply + 1);
         td.board.unmakeMove(m);
@@ -510,10 +519,10 @@ bool checkStatus(threaddata &td) {
 bool countNode(threaddata &td) {
     td.nodes++;
     if (td.nodes % td.tm->node_batch_size == 0) {
-        uint64_t nodes = td.gs->nodes_searched.fetch_add(
-                             td.tm->node_batch_size,
-                             std::memory_order_relaxed) +
-                         td.tm->node_batch_size;
+        uint64_t nodes =
+            td.gs->nodes_searched.fetch_add(td.tm->node_batch_size,
+                                            std::memory_order_relaxed) +
+            td.tm->node_batch_size;
         if (td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
             td.gs->thread_stop.store(true, std::memory_order_relaxed);
             return false;
@@ -525,8 +534,8 @@ bool countNode(threaddata &td) {
 
 void performMove(threaddata &td, Move move, sstack_data *ss) {
 
-    (ss + 1)->accums[0] = ss->accums[0];
-    (ss + 1)->accums[1] = ss->accums[1];
+    // (ss + 1)->accums[0] = ss->accums[0];
+    // (ss + 1)->accums[1] = ss->accums[1];
 
     Piece from = td.board.at(move.from());
     Piece to = td.board.at(move.to());
@@ -537,37 +546,73 @@ void performMove(threaddata &td, Move move, sstack_data *ss) {
         Square king_to = (move.from() > move.to()) ? dest - 2 : dest + 2;
         Square rook_to = (move.from() > move.to()) ? king_to + 1 : king_to - 1;
 
-        nnue_remove_piece((ss + 1)->accums, move.to(),
-                          stm == Color::WHITE ? Piece::WHITEROOK
-                                              : Piece::BLACKROOK);
-        nnue_add_piece((ss + 1)->accums, rook_to,
-                       stm == Color::WHITE ? Piece::WHITEROOK
-                                           : Piece::BLACKROOK);
+        NNUE::accum_add2_sub2_feats(
+            ss->accums[0].values,
+            (ss+1)->accums[0].values,
+            calculate_nnue_index(Color::WHITE, rook_to, stm == Color::WHITE ? Piece::WHITEROOK : Piece::BLACKROOK),
+            calculate_nnue_index(Color::WHITE, king_to, stm == Color::WHITE ? Piece::WHITEKING : Piece::BLACKKING),
+            calculate_nnue_index(Color::WHITE, move.to(), stm == Color::WHITE ? Piece::WHITEROOK : Piece::BLACKROOK),
+            calculate_nnue_index(Color::WHITE, move.from(), stm == Color::WHITE ? Piece::WHITEKING : Piece::BLACKKING)
+        );
 
-        nnue_remove_piece((ss + 1)->accums, move.from(),
-                          stm == Color::WHITE ? Piece::WHITEKING
-                                              : Piece::BLACKKING);
-        nnue_add_piece((ss + 1)->accums, king_to,
-                       stm == Color::WHITE ? Piece::WHITEKING
-                                           : Piece::BLACKKING);
+        NNUE::accum_add2_sub2_feats(
+            ss->accums[1].values,
+            (ss+1)->accums[1].values,
+            calculate_nnue_index(Color::BLACK, rook_to, stm == Color::WHITE ? Piece::WHITEROOK : Piece::BLACKROOK),
+            calculate_nnue_index(Color::BLACK, king_to, stm == Color::WHITE ? Piece::WHITEKING : Piece::BLACKKING),
+            calculate_nnue_index(Color::BLACK, move.to(), stm == Color::WHITE ? Piece::WHITEROOK : Piece::BLACKROOK),
+            calculate_nnue_index(Color::BLACK, move.from(), stm == Color::WHITE ? Piece::WHITEKING : Piece::BLACKKING)
+        );
     } else if (move.typeOf() == Move::ENPASSANT) {
-        nnue_remove_piece((ss + 1)->accums, move.from(), from);
-        nnue_add_piece((ss + 1)->accums, move.to(), from);
-        nnue_remove_piece((ss + 1)->accums, move.to().ep_square(),
-                          stm == Color::WHITE ? Piece::BLACKPAWN
-                                              : Piece::WHITEPAWN);
-    } else if (move.typeOf() == Move::PROMOTION) {
-        nnue_remove_piece((ss + 1)->accums, move.from(), from);
-        nnue_add_piece((ss + 1)->accums, move.to(),
-                       Piece(move.promotionType(), stm));
-        if (to != Piece::NONE) {
-            nnue_remove_piece((ss + 1)->accums, move.to(), to);
-        }
+
+        NNUE::accum_add_sub2_feats(
+            ss->accums[0].values,
+            (ss+1)->accums[0].values,
+            calculate_nnue_index(Color::WHITE, move.to(), from),
+            calculate_nnue_index(Color::WHITE, move.to().ep_square(), stm == Color::WHITE ? Piece::BLACKPAWN : Piece::WHITEPAWN),
+            calculate_nnue_index(Color::WHITE, move.from(), from)
+        );
+
+        NNUE::accum_add_sub2_feats(
+            ss->accums[1].values,
+            (ss+1)->accums[1].values,
+            calculate_nnue_index(Color::BLACK, move.to(), from),
+            calculate_nnue_index(Color::BLACK, move.to().ep_square(), stm == Color::WHITE ? Piece::BLACKPAWN : Piece::WHITEPAWN),
+            calculate_nnue_index(Color::BLACK, move.from(), from)
+        );
+
     } else {
-        nnue_remove_piece((ss + 1)->accums, move.from(), from);
-        nnue_add_piece((ss + 1)->accums, move.to(), from);
+        Piece moved_piece =
+            move.typeOf() == Move::PROMOTION ? Piece(move.promotionType(), stm)
+                                             : from;
+        size_t white_add = calculate_nnue_index(Color::WHITE, move.to(), moved_piece);
+        size_t white_remove = calculate_nnue_index(Color::WHITE, move.from(), from);
+        size_t black_add = calculate_nnue_index(Color::BLACK, move.to(), moved_piece);
+        size_t black_remove = calculate_nnue_index(Color::BLACK, move.from(), from);
+
         if (to != Piece::NONE) {
-            nnue_remove_piece((ss + 1)->accums, move.to(), to);
+            NNUE::accum_add_sub2_feats(
+                ss->accums[0].values,
+                (ss+1)->accums[0].values,
+                white_add,
+                calculate_nnue_index(Color::WHITE, move.to(), to),
+                white_remove
+            );
+
+            NNUE::accum_add_sub2_feats(
+                ss->accums[1].values,
+                (ss+1)->accums[1].values,
+                black_add,
+                calculate_nnue_index(Color::BLACK, move.to(), to),
+                black_remove
+            );
+        } else {
+            NNUE::accum_add_sub_feats(ss->accums[0].values,
+                                      (ss + 1)->accums[0].values, white_add,
+                                      white_remove);
+            NNUE::accum_add_sub_feats(ss->accums[1].values,
+                                      (ss + 1)->accums[1].values, black_add,
+                                      black_remove);
         }
     }
 

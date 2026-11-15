@@ -3,21 +3,21 @@
 #define CHESS_USE_PEXT
 #include <chess.hpp>
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 
 #include "nnue.h"
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define CLAMP(x, low, high)                                                    \
+    ((x) < (low) ? (low) : ((x) > (high) ? (high) : (x)))
 
-#define MAX(x,y) ((x) > (y) ? (x) : (y))
-#define MIN(x,y) ((x) < (y) ? (x) : (y))
-#define CLAMP(x, low, high) ((x) < (low) ? (low) : ((x) > (high) ? (high) : (x)))
-
-inline uint64_t perft(chess::Board& board, int depth) {
+inline uint64_t perft(chess::Board &board, int depth) {
     chess::Movelist moves;
     chess::movegen::legalmoves(moves, board);
 
-    if(depth == 1){
+    if (depth == 1) {
         return moves.size();
     }
 
@@ -25,20 +25,20 @@ inline uint64_t perft(chess::Board& board, int depth) {
     for (int i = 0; i < moves.size(); i++) {
         const auto move = moves[i];
         board.makeMove(move);
-        nodes += perft(board, depth-1);
+        nodes += perft(board, depth - 1);
         board.unmakeMove(move);
     }
 
     return nodes;
 }
 
-inline uint64_t perft_top(chess::Board& board, int depth) {
+inline uint64_t perft_top(chess::Board &board, int depth) {
     auto start = std::chrono::steady_clock::now();
 
     chess::Movelist moves;
     chess::movegen::legalmoves(moves, board);
 
-    if(depth == 1){
+    if (depth == 1) {
         return moves.size();
     }
 
@@ -48,7 +48,7 @@ inline uint64_t perft_top(chess::Board& board, int depth) {
         uint64_t nodes = 0;
 
         board.makeMove(move);
-        nodes = perft(board, depth-1);
+        nodes = perft(board, depth - 1);
         board.unmakeMove(move);
         total_nodes += nodes;
 
@@ -57,14 +57,17 @@ inline uint64_t perft_top(chess::Board& board, int depth) {
 
     std::cout << "nodes: " << total_nodes << std::endl;
     auto end = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    std::cout << "nps: " << std::fixed << (total_nodes * 1000.0) / duration.count() << std::endl;
+    std::cout << "nps: " << std::fixed
+              << (total_nodes * 1000.0) / duration.count() << std::endl;
 
     return total_nodes;
 }
 
-inline int calculate_nnue_index(chess::Color perspective, chess::Square sq, chess::Piece piece) {
+inline int calculate_nnue_index(chess::Color perspective, chess::Square sq,
+                                chess::Piece piece) {
     int square = sq.index();
     int side = piece.color();
     if (perspective == chess::Color::BLACK) {
@@ -74,34 +77,95 @@ inline int calculate_nnue_index(chess::Color perspective, chess::Square sq, ches
     return side * 64 * 6 + piece.type() * 64 + square;
 }
 
-inline void populateAccums(Accumulator accums[2], const chess::Board& board) {
+inline void populateAccums(Accumulator accums[2], const chess::Board &board) {
 
     for (int i = 0; i < 64; i++) {
         chess::Piece piece_at = board.at(i);
-        if (piece_at == chess::Piece::NONE) continue;
-        NNUE::accum_add_feat(calculate_nnue_index(chess::Color::WHITE, i, piece_at), accums[0]);
-        NNUE::accum_add_feat(calculate_nnue_index(chess::Color::BLACK, i, piece_at), accums[1]);
+        if (piece_at == chess::Piece::NONE)
+            continue;
+
+        auto white_index = calculate_nnue_index(chess::Color::WHITE, i, piece_at);
+        auto black_index = calculate_nnue_index(chess::Color::BLACK, i, piece_at);
+
+        NNUE::accum_add_feat(accums[0].values, accums[0].values, white_index);
+        NNUE::accum_add_feat(accums[1].values, accums[1].values, black_index);
     }
 }
 
-inline void nnue_add_piece(Accumulator accums[2], chess::Square sq, chess::Piece piece) {
-    NNUE::accum_add_feat(calculate_nnue_index(chess::Color::WHITE, sq, piece), accums[0]);
-    NNUE::accum_add_feat(calculate_nnue_index(chess::Color::BLACK, sq, piece), accums[1]);
-};
+// inline void nnue_add_piece(Accumulator accums[2], chess::Square sq,
+//                            chess::Piece piece) {
+//     NNUE::accum_add_feat(calculate_nnue_index(chess::Color::WHITE, sq, piece),
+//                          accums[0]);
+//     NNUE::accum_add_feat(calculate_nnue_index(chess::Color::BLACK, sq, piece),
+//                          accums[1]);
+// };
 
-inline void nnue_remove_piece(Accumulator accums[2], chess::Square sq, chess::Piece piece) {
-    NNUE::accum_remove_feat(calculate_nnue_index(chess::Color::WHITE, sq, piece), accums[0]);
-    NNUE::accum_remove_feat(calculate_nnue_index(chess::Color::BLACK, sq, piece), accums[1]);
-};
+// inline void nnue_remove_piece(Accumulator accums[2], chess::Square sq,
+//                               chess::Piece piece) {
+//     NNUE::accum_remove_feat(
+//         calculate_nnue_index(chess::Color::WHITE, sq, piece), accums[0]);
+//     NNUE::accum_remove_feat(
+//         calculate_nnue_index(chess::Color::BLACK, sq, piece), accums[1]);
+// };
 
+// inline void nnue_add_sub_feats(Accumulator accums[2], chess::Square add_sq,
+//                                chess::Piece add_piece, chess::Square sub_sq,
+//                                chess::Piece sub_piece) {
+//     NNUE::accum_add_sub_feats(
+//         calculate_nnue_index(chess::Color::WHITE, add_sq, add_piece),
+//         calculate_nnue_index(chess::Color::WHITE, sub_sq, sub_piece),
+//         accums[0]);
+//     NNUE::accum_add_sub_feats(
+//         calculate_nnue_index(chess::Color::BLACK, add_sq, add_piece),
+//         calculate_nnue_index(chess::Color::BLACK, sub_sq, sub_piece),
+//         accums[1]);
+// }
+
+// inline void nnue_add_sub2_feats(Accumulator accums[2], chess::Square add_sq,
+//                                 chess::Piece add_piece, chess::Square sub1_sq,
+//                                 chess::Piece sub1_piece, chess::Square sub2_sq,
+//                                 chess::Piece sub2_piece) {
+//     NNUE::accum_add_sub2_feats(
+//         calculate_nnue_index(chess::Color::WHITE, add_sq, add_piece),
+//         calculate_nnue_index(chess::Color::WHITE, sub1_sq, sub1_piece),
+//         calculate_nnue_index(chess::Color::WHITE, sub2_sq, sub2_piece),
+//         accums[0]);
+//     NNUE::accum_add_sub2_feats(
+//         calculate_nnue_index(chess::Color::BLACK, add_sq, add_piece),
+//         calculate_nnue_index(chess::Color::BLACK, sub1_sq, sub1_piece),
+//         calculate_nnue_index(chess::Color::BLACK, sub2_sq, sub2_piece),
+//         accums[1]);
+// }
+
+// inline void nnue_add2_sub2_feats(Accumulator accums[2], chess::Square add1_sq,
+//                                  chess::Piece add1_piece, chess::Square add2_sq,
+//                                  chess::Piece add2_piece, chess::Square sub1_sq,
+//                                  chess::Piece sub1_piece, chess::Square sub2_sq,
+//                                  chess::Piece sub2_piece) {
+//     NNUE::accum_add2_sub2_feats(
+//         calculate_nnue_index(chess::Color::WHITE, add1_sq, add1_piece),
+//         calculate_nnue_index(chess::Color::WHITE, add2_sq, add2_piece),
+//         calculate_nnue_index(chess::Color::WHITE, sub1_sq, sub1_piece),
+//         calculate_nnue_index(chess::Color::WHITE, sub2_sq, sub2_piece),
+//         accums[0]);
+//     NNUE::accum_add2_sub2_feats(
+//         calculate_nnue_index(chess::Color::BLACK, add1_sq, add1_piece),
+//         calculate_nnue_index(chess::Color::BLACK, add2_sq, add2_piece),
+//         calculate_nnue_index(chess::Color::BLACK, sub1_sq, sub1_piece),
+//         calculate_nnue_index(chess::Color::BLACK, sub2_sq, sub2_piece),
+//         accums[1]);
+// }
 
 struct PinnersBlockersStruct {
     chess::Bitboard our_pinners;
     chess::Bitboard their_blockers;
 };
 
-chess::Bitboard attackers_to_square(const chess::Board& board, chess::Square square, chess::Bitboard occupied);
-PinnersBlockersStruct fetchPinnersBlockers(const chess::Board& board, chess::Color us);
+chess::Bitboard attackers_to_square(const chess::Board &board,
+                                    chess::Square square,
+                                    chess::Bitboard occupied);
+PinnersBlockersStruct fetchPinnersBlockers(const chess::Board &board,
+                                           chess::Color us);
 
 extern chess::Bitboard BETWEEN_MASK[64][64];
 
