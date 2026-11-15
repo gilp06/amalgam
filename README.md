@@ -1,0 +1,3 @@
+# Amalgam
+
+This is my chess engine that I started after being somewhat satisfied with [gilperchess](https://github.com/gilp06/gilperchess). However, there were a few changes I wanted to make that made me want to rewrite it in C++. I mainly wanted to use Disservin's [chess-library](https://github.com/Disservin/chess-library) to handle the board-state/making moves since its performance and support for Chess960 is much better than my original attempt. As you can probably guess, the name of the engine comes from it being an amalgamation of sorts from various engine and search ideas from other places that I put into here. 
