@@ -21,13 +21,10 @@ static const int INF = INT16_MAX;
 
 std::vector<threaddata> tds;
 
-void startSearch(globalstate *gs, searchparams *params) {
+void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
     timemanager tm(*params, gs->board.sideToMove(), gs->num_threads);
-
-    std::cout << tm.max_search_time << std::endl;
-
     Accumulator initial_accums[2];
     initial_accums[0] = LOADED_NNUE->feature_biases;
     initial_accums[1] = LOADED_NNUE->feature_biases;
@@ -56,9 +53,9 @@ void startSearch(globalstate *gs, searchparams *params) {
     std::vector<std::thread> workers;
     for (int i = 1; i < gs->num_threads; i++) {
         // spin up threads
-        workers.emplace_back(search, std::ref(tds[i]), false);
+        workers.emplace_back(search, std::ref(tds[i]), false, suppress_output);
     }
-    search(std::ref(tds[0]), true);
+    search(std::ref(tds[0]), true, suppress_output);
     // wait for all threads to finish
     for (auto &worker : workers) {
         worker.join();
@@ -68,16 +65,18 @@ void startSearch(globalstate *gs, searchparams *params) {
         tds[i].gs->thread_stop.store(true, std::memory_order_relaxed);
     }
 
-    std::cout << "bestmove "
-              << uci::moveToUci(tds[0].best_move, tds[0].board.chess960());
-    if (tds[0].ponder != Move::NO_MOVE) {
-        std::cout << " ponder "
-                  << uci::moveToUci(tds[0].ponder, tds[0].board.chess960());
+    if (!suppress_output) {
+        std::cout << "bestmove "
+                  << uci::moveToUci(tds[0].best_move, tds[0].board.chess960());
+        if (tds[0].ponder != Move::NO_MOVE) {
+            std::cout << " ponder "
+                      << uci::moveToUci(tds[0].ponder, tds[0].board.chess960());
+        }
+        std::cout << std::endl;
     }
-    std::cout << std::endl;
 }
 
-void search(std::reference_wrapper<threaddata> td_ref, bool main) {
+void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_output) {
     threaddata &td = td_ref.get();
     int16_t cur_depth = 1;
     while (true) {
@@ -133,7 +132,7 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main) {
             break;
         }
 
-        if (main) {
+        if (main && !suppress_output) {
             double time_spent =
                 std::chrono::duration<double>(std::chrono::steady_clock::now() -
                                               td.tm->start)

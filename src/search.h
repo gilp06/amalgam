@@ -100,8 +100,8 @@ struct threaddata {
 
 bool checkStatus(threaddata& td);
 bool countNode(threaddata& td);
-void startSearch(globalstate* gs, searchparams* params);
-void search(std::reference_wrapper<threaddata> td, bool main);
+void startSearch(globalstate* gs, searchparams* params, bool suppress_output = false);
+void search(std::reference_wrapper<threaddata> td, bool main, bool suppress_output = false);
 void performMove(threaddata& td, chess::Move move, sstack_data* ss);
 int16_t evaluate(threaddata& td, int16_t ply);
 
