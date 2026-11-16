@@ -1,26 +1,27 @@
 #define CHESS_USE_PEXT
 #include "chess.hpp"
 
+#include "uci.h"
+#include <cstdint>
 #include <sstream>
 #include <string>
-#include <cstdint>
 #include <thread>
-#include "uci.h"
+#include <random>
 
-#include "utils.h"
 #include "search.h"
+#include "utils.h"
 
 searchparams params = {};
 std::thread search_thread;
 
-static void stopSearch(globalstate* gs) {
+static void stopSearch(globalstate *gs) {
     if (search_thread.joinable()) {
         gs->thread_stop.store(true, std::memory_order_relaxed);
         search_thread.join();
     }
 }
 
-bool UCILoop(globalstate* gs) {
+bool UCILoop(globalstate *gs) {
 
     std::string input;
     std::cin.clear();
@@ -31,7 +32,7 @@ bool UCILoop(globalstate* gs) {
 
     toks >> token;
 
-    if(token == "uci") {
+    if (token == "uci") {
         std::cout << "id name amalgam 1.0\n";
         std::cout << "id author gilp06\n";
         std::cout << "option name Hash type spin default 16 min 1 max 1024\n";
@@ -42,25 +43,24 @@ bool UCILoop(globalstate* gs) {
         return false;
     }
 
-    if(token == "isready") {
+    if (token == "isready") {
         std::cout << "readyok\n";
         return false;
     }
 
-    if(token == "ucinewgame") {
+    if (token == "ucinewgame") {
         stopSearch(gs);
         // we should just clear the hash here
         gs->tt.clear();
         return false;
     }
 
-    if(token == "position") {
+    if (token == "position") {
         stopSearch(gs);
         toks >> token;
-        if(token == "startpos") {
+        if (token == "startpos") {
             gs->board = chess::Board();
-        }
-        else if(token == "fen") {
+        } else if (token == "fen") {
 
             std::string fen;
             std::string part;
@@ -71,7 +71,7 @@ bool UCILoop(globalstate* gs) {
                     return false;
                 }
 
-                if(i)
+                if (i)
                     fen += ' ';
                 fen += part;
             }
@@ -86,7 +86,8 @@ bool UCILoop(globalstate* gs) {
             while (toks >> token) {
                 auto move = chess::uci::uciToMove(gs->board, token);
                 if (!gs->board.isLegal(move)) {
-                    std::cout << "illegal move: " << token << " stopping early!\n";
+                    std::cout << "illegal move: " << token
+                              << " stopping early!\n";
                     return false;
                 }
                 gs->board.makeMove(move);
@@ -95,7 +96,7 @@ bool UCILoop(globalstate* gs) {
         return false;
     }
 
-    if(token == "go") {
+    if (token == "go") {
         stopSearch(gs);
 
         params = {};
@@ -107,26 +108,19 @@ bool UCILoop(globalstate* gs) {
 
                 perft_top(gs->board, depth);
                 return false;
-            }
-            else if (token == "nodes") {
+            } else if (token == "nodes") {
                 toks >> params.max_nodes;
-            }
-            else if (token == "depth") {
+            } else if (token == "depth") {
                 toks >> params.max_depth;
-            }
-            else if (token == "wtime") {
+            } else if (token == "wtime") {
                 toks >> params.wtime;
-            }
-            else if (token == "btime") {
+            } else if (token == "btime") {
                 toks >> params.btime;
-            }
-            else if (token == "winc") {
+            } else if (token == "winc") {
                 toks >> params.winc;
-                }
-            else if (token == "binc") {
+            } else if (token == "binc") {
                 toks >> params.binc;
-            }
-            else if (token == "movetime") {
+            } else if (token == "movetime") {
                 toks >> params.movetime;
             }
         }
@@ -137,26 +131,67 @@ bool UCILoop(globalstate* gs) {
         return false;
     }
 
-    if(token == "stop") {
+    if (token == "stop") {
         gs->thread_stop.store(true, std::memory_order_relaxed);
         stopSearch(gs);
         return false;
     }
 
-    if(token == "quit") {
+    if (token == "quit") {
         stopSearch(gs);
         return true;
     }
 
-    if(token == "setoption") {
+    if (token == "setoption") {
         if (toks >> token && token == "name") {
 
             std::string opt_name;
             toks >> opt_name;
 
             if (toks >> token && token == "value") {
-                    updateUCIOpts(gs, opt_name, toks);
-                    return false;
+                updateUCIOpts(gs, opt_name, toks);
+                return false;
+            }
+        }
+    }
+
+    if (token == "genfens") {
+        // https://github.com/AndyGrant/OpenBench/wiki/Data-Generation-Workloads#genfens-interface
+        // Currently I will not support
+        // first read the count
+        uint64_t count = 0;
+        if (toks >> count) {
+            if (toks >> token && token == "seed") {
+                uint64_t seed = 0;
+                if (toks >> seed) {
+                    if (toks >> token && token == "book") {
+                        if (toks >> token && token == "None") {
+                            while (toks >> token) {
+                                if (token == "depth") {
+                                    uint64_t depth = 0;
+                                    if (toks >> depth) {
+                                        genFens(count, seed, depth);
+                                        return false;
+                                    } else {
+                                        std::cout
+                                            << "invalid depth in: " << input
+                                            << std::endl;
+                                        return false;
+                                    }
+                                } else {
+
+                                    return false;
+                                }
+                            }
+                            genFens(count, seed, 8);
+                            return false;
+                        } else {
+                            std::cout << "invalid book option in: " << input
+                                      << std::endl;
+                            return false;
+                        }
+                    }
+                }
             }
         }
     }
@@ -166,23 +201,27 @@ bool UCILoop(globalstate* gs) {
     return false;
 }
 
-
-void updateUCIOpts(globalstate* gs, const std::string &opt_name, std::istringstream &remaining) {
+void updateUCIOpts(globalstate *gs, const std::string &opt_name,
+                   std::istringstream &remaining) {
     stopSearch(gs);
 
     if (opt_name == "Hash") {
         int size;
         remaining >> size;
-        if (size < 1) size = 1;
-        if (size > 1024) size = 1024;
+        if (size < 1)
+            size = 1;
+        if (size > 1024)
+            size = 1024;
         gs->tt.resize(size);
     }
 
     if (opt_name == "Threads") {
         int threads;
         remaining >> threads;
-        if (threads < 1) threads = 1;
-        if (threads > 256) threads = 256;
+        if (threads < 1)
+            threads = 1;
+        if (threads > 256)
+            threads = 256;
         gs->num_threads = threads;
     }
 
@@ -208,7 +247,6 @@ void updateUCIOpts(globalstate* gs, const std::string &opt_name, std::istringstr
         }
     }
 }
-
 
 // stole this from the discord :)
 const std::vector<std::string> BENCH_FENS = {
@@ -261,8 +299,7 @@ const std::vector<std::string> BENCH_FENS = {
     "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq c3 0 2",
     "2rr2k1/1p4bp/p1q1p1p1/4Pp1n/2PB4/1PN3P1/P3Q2P/2RR2K1 w - f6 0 20",
     "3br1k1/p1pn3p/1p3n2/5pNq/2P1p3/1PN3PP/P2Q1PB1/4R1K1 w - - 0 23",
-    "2r2b2/5p2/5k2/p1r1pP2/P2pB3/1P3P2/K1P3R1/7R w - - 23 93"
-};
+    "2r2b2/5p2/5k2/p1r1pP2/P2pB3/1P3P2/K1P3R1/7R w - - 23 93"};
 
 void bench() {
 
@@ -271,16 +308,7 @@ void bench() {
 
     for (const auto &fen : BENCH_FENS) {
         TTable ttable(16);
-        globalstate gs = {
-            chess::Board(fen),
-            true,
-            0,
-            false,
-            false,
-            1,
-            ttable
-        };
-
+        globalstate gs = {chess::Board(fen), true, 0, false, false, 1, ttable};
 
         searchparams params = {};
         params.max_depth = 10;
@@ -291,7 +319,26 @@ void bench() {
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
     auto nps = (uint64_t)(total_nodes * 1000.0) / duration.count();
     std::cout << total_nodes << " nodes " << nps << " nps" << std::endl;
+}
+
+void genFens(uint64_t count, uint64_t seed, uint64_t depth) {
+    std::mt19937_64 rng(seed);
+    for (uint64_t i = 0; i < count; i++) {
+        chess::Board board;
+        for (uint64_t j = 0; j < depth; j++) {
+            chess::Movelist moves;
+            chess::movegen::legalmoves(moves, board);
+            if (moves.size() == 0) {
+                break;
+            }
+            std::uniform_int_distribution<size_t> dist(0, moves.size() - 1);
+            auto move = moves[dist(rng)];
+            board.makeMove(move);
+        }
+        std::cout << "info string genfens " << board.getFen() << std::endl;
+    }
 }
