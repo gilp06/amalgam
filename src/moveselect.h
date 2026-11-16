@@ -19,7 +19,11 @@ enum MoveSelectStage {
 using HistoryHeuristicTable = std::array<std::array<std::array<int16_t, 64>, 64>, 2>;
 void UpdateHistoryHeuristic(HistoryHeuristicTable& historyHeuristic, chess::Color stm, chess::Move move, int16_t bonus);
 
-
+const extern int16_t SEEPawn;
+const extern int16_t SEEKnight;
+const extern int16_t SEEBishop;
+const extern int16_t SEERook;
+const extern int16_t SEEQueen;
 
 class MoveSelect {
     public:

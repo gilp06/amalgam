@@ -512,6 +512,9 @@ int16_t evaluate(threaddata &td, int16_t ply) {
         score = NNUE::evaluate(&td.ss[ply].accums[1], &td.ss[ply].accums[0],
                               td.board.all().count());
     }
+
+    score = std::clamp(score, -CHECKMATE + ply, CHECKMATE - ply);
+
     return score;
 }
 
