@@ -503,13 +503,16 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
 }
 
 int16_t evaluate(threaddata &td, int16_t ply) {
+
+    int32_t score = 0;
     if (td.board.sideToMove() == Color::WHITE) {
-        return NNUE::evaluate(&td.ss[ply].accums[0], &td.ss[ply].accums[1],
+        score = NNUE::evaluate(&td.ss[ply].accums[0], &td.ss[ply].accums[1],
                               td.board.all().count());
     } else {
-        return NNUE::evaluate(&td.ss[ply].accums[1], &td.ss[ply].accums[0],
+        score = NNUE::evaluate(&td.ss[ply].accums[1], &td.ss[ply].accums[0],
                               td.board.all().count());
     }
+    return score;
 }
 
 bool checkStatus(threaddata &td) {

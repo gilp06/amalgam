@@ -6,8 +6,8 @@
 #include <immintrin.h>
 #include <incbin.h>
 
-#define NNUE_PATH "../nnue/selfgen-v2.bin"
-#define HIDDEN_SIZE 256
+#define NNUE_PATH "../nnue/led-40-1024.bin"
+#define HIDDEN_SIZE 1024
 #define SCALE 400
 #define BUCKET_COUNT 1
 #define BUCKET_DIV ((32 + BUCKET_COUNT - 1) / BUCKET_COUNT)
