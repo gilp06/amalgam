@@ -22,11 +22,13 @@ static void stopSearch(globalstate *gs) {
 }
 
 bool UCILoop(globalstate *gs) {
-
     std::string input;
     std::cin.clear();
     std::getline(std::cin, input);
+    return UCICommand(gs, input);
+}
 
+bool UCICommand(globalstate *gs, const std::string &input) {
     std::istringstream toks(input);
     std::string token;
 

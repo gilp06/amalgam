@@ -6,13 +6,7 @@
 
 int main(int argc, char **argv) {
 
-    
-    
-
     initLookup();
-
-    bool done = false;
-
 
     if (argc == 2 && strcmp(argv[1], "bench") == 0) {
         bench();
@@ -30,9 +24,12 @@ int main(int argc, char **argv) {
         1,
         table,
     };
+    bool done = false;
+    for (int i = 1; i < argc && !done; ++i) {
+        done = UCICommand(&gs, argv[i]);
+    }
 
-    
-    while(!done) {
+    while (!done) {
         done = UCILoop(&gs);
     }
 
