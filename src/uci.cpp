@@ -329,9 +329,16 @@ void bench() {
 
 void genFens(uint64_t count, uint64_t seed, uint64_t depth) {
     std::mt19937_64 rng(seed);
+
+    // jiggle the depth by 1 sometimes in order to split it evenly between exiting black and white
+    std::uniform_int_distribution<int> dist(0,1);
+
+    
+    
     for (uint64_t i = 0; i < count; i++) {
         chess::Board board;
-        for (uint64_t j = 0; j < depth; j++) {
+        uint64_t cur_depth = depth - dist(rng);
+        for (uint64_t j = 0; j < cur_depth; j++) {
             chess::Movelist moves;
             chess::movegen::legalmoves(moves, board);
             if (moves.size() == 0) {
