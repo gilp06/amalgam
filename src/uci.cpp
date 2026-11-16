@@ -37,6 +37,7 @@ bool UCILoop(globalstate* gs) {
         std::cout << "option name Hash type spin default 16 min 1 max 1024\n";
         std::cout << "option name Threads type spin default 1 min 1 max 256\n";
         std::cout << "option name UCI_Chess960 type check default false\n";
+        std::cout << "option name Softnodes type check default false\n";
         std::cout << "uciok\n";
         return false;
     }
@@ -196,6 +197,16 @@ void updateUCIOpts(globalstate* gs, const std::string &opt_name, std::istringstr
             gs->chess960 = false;
         }
     }
+
+    if (opt_name == "Softnodes") {
+        std::string val;
+        remaining >> val;
+        if (val == "true") {
+            gs->softnodes = true;
+        } else {
+            gs->softnodes = false;
+        }
+    }
 }
 
 
@@ -264,6 +275,7 @@ void bench() {
             chess::Board(fen),
             true,
             0,
+            false,
             false,
             1,
             ttable

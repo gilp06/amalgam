@@ -65,12 +65,20 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
         tds[i].gs->thread_stop.store(true, std::memory_order_relaxed);
     }
 
+    // pick the thread that went the deepest and use its best move
+    int best_thread = 0;
+    for (int i = 1; i < gs->num_threads; i++) {
+        if (tds[i].seldepth > tds[best_thread].seldepth) {
+            best_thread = i;
+        }
+    }
+
     if (!suppress_output) {
         std::cout << "bestmove "
-                  << uci::moveToUci(tds[0].best_move, tds[0].board.chess960());
-        if (tds[0].ponder != Move::NO_MOVE) {
+                  << uci::moveToUci(tds[best_thread].best_move, tds[best_thread].board.chess960());
+        if (tds[best_thread].ponder != Move::NO_MOVE) {
             std::cout << " ponder "
-                      << uci::moveToUci(tds[0].ponder, tds[0].board.chess960());
+                      << uci::moveToUci(tds[best_thread].ponder, tds[best_thread].board.chess960());
         }
         std::cout << std::endl;
     }
@@ -148,6 +156,17 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
                           << uci::moveToUci(td.pv[0][i], td.board.chess960());
             }
             std::cout << std::endl;
+        }
+
+        // check soft node limit
+        uint64_t nodes =
+            td.gs->nodes_searched.fetch_add(td.tm->node_batch_size,
+                                            std::memory_order_relaxed) +
+            td.tm->node_batch_size;
+        
+        if (td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
+            td.gs->thread_stop.store(true, std::memory_order_relaxed);
+            break;
         }
     }
 }
@@ -521,7 +540,8 @@ bool countNode(threaddata &td) {
             td.gs->nodes_searched.fetch_add(td.tm->node_batch_size,
                                             std::memory_order_relaxed) +
             td.tm->node_batch_size;
-        if (td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
+        // only stop the search if we are not in softnodes mode and we have a max node limit
+        if (!td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
             td.gs->thread_stop.store(true, std::memory_order_relaxed);
             return false;
         }

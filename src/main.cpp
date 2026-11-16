@@ -25,8 +25,9 @@ int main(int argc, char **argv) {
         chess::Board(),
         true,
         0,
-        true,
-        4,
+        false,
+        false,
+        1,
         table,
     };
 
