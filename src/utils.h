@@ -6,11 +6,24 @@
 #include <chrono>
 #include <cstdint>
 
+
+#include "ttable.h"
 #include "nnue.h"
+
+
+struct globalstate {
+    chess::Board board;
+    std::atomic_bool thread_stop;
+    std::atomic<uint64_t> nodes_searched;
+    bool chess960;
+    int num_threads;
+    TTable& tt;
+};
+
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define CLAMP(x, low, high)                                                    \
+#define CLAMP(x, low, high) \
     ((x) < (low) ? (low) : ((x) > (high) ? (high) : (x)))
 
 inline uint64_t perft(chess::Board &board, int depth) {

@@ -1,7 +1,6 @@
 #define CHESS_USE_PEXT
 #include <chess.hpp>
 #include "utils.h"
-#include "types.h"
 #include "uci.h"
 
 

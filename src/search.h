@@ -2,7 +2,7 @@
 
 #include <chess.hpp>
 #include "nnue.h"
-#include "types.h"
+#include "utils.h"
 #include "moveselect.h"
 #include <chrono>
 #include <cstdint>

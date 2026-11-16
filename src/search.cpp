@@ -14,7 +14,6 @@
 using namespace chess;
 
 #include "search.h"
-#include "types.h"
 #include "utils.h"
 
 static const int CHECKMATE = 30000;

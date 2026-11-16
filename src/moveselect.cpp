@@ -8,11 +8,11 @@
 
 using namespace chess;
 
-const static int16_t SEEPawn = 200;
-const static int16_t SEEKnight = 760;
-const static int16_t SEEBishop = 820;
-const static int16_t SEERook = 1270;
-const static int16_t SEEQueen = 2500;
+const static int16_t SEEPawn = 100;
+const static int16_t SEEKnight = 300;
+const static int16_t SEEBishop = 300;
+const static int16_t SEERook = 500;
+const static int16_t SEEQueen = 900;
 
 const int16_t SEEPieceValues[14] = {
     SEEPawn,   SEEKnight, SEEBishop, SEERook,  SEEQueen, 0, SEEPawn,

@@ -8,7 +8,6 @@
 #include "uci.h"
 
 #include "utils.h"
-#include "types.h"
 #include "search.h"
 
 searchparams params = {};
