@@ -6,7 +6,7 @@
 #include <immintrin.h>
 #include <incbin.h>
 
-#define NNUE_PATH "../nnue/led-40-1024.bin"
+#define NNUE_PATH "../nnue/led-base-1024-400.bin"
 #define HIDDEN_SIZE 1024
 #define SCALE 400
 #define BUCKET_COUNT 1
@@ -89,10 +89,9 @@ public:
 
   static inline size_t get_bucket(size_t piece_count) {
     size_t bucket = (piece_count - 2) / BUCKET_DIV;
-
-    if (bucket >= BUCKET_COUNT)
-      return BUCKET_COUNT - 1;
-
+    if (bucket >= BUCKET_COUNT) {
+      bucket = BUCKET_COUNT - 1;
+    }
     return bucket;
   }
 

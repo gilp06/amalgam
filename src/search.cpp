@@ -19,7 +19,39 @@ using namespace chess;
 static const int CHECKMATE = 30000;
 static const int INF = INT16_MAX;
 
+static int16_t scoreToTT(int16_t score, int16_t ply) {
+    if (score > CHECKMATE - MAX_PLY) {
+        return score + ply;
+    }
+    if (score < -CHECKMATE + MAX_PLY) {
+        return score - ply;
+    }
+    return score;
+}
+
+static int16_t scoreFromTT(int16_t score, int16_t ply) {
+    if (score > CHECKMATE - 1000) {
+        return score - ply;
+    }
+    if (score < -CHECKMATE + 1000) {
+        return score + ply;
+    }
+    return score;
+}
+
 std::vector<threaddata> tds;
+
+int convert_mate(int16_t score) {
+    if (score > CHECKMATE - 1000) {
+        int ply_to_mate = CHECKMATE - score;
+        return (ply_to_mate + 1) / 2;
+    }
+    if (score < -CHECKMATE + 1000) {
+        int ply_to_mate = score + CHECKMATE;
+        return -(((ply_to_mate) + 1) / 2);
+    }
+    return INT16_MAX;
+}
 
 void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
     tds.resize(gs->num_threads);
@@ -135,6 +167,7 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
 
             delta = delta + delta / 2;
         }
+        int16_t mate = convert_mate(td.score);
 
         if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
             break;
@@ -147,8 +180,16 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
                     .count();
             uint64_t nodes =
                 td.gs->nodes_searched.load(std::memory_order_relaxed);
-            std::cout << "info depth " << cur_depth - 1 << " seldepth "
-                      << td.seldepth << " score cp " << td.score << " nodes "
+            std::cout << "info depth " << cur_depth - 1 << " seldepth " << td.seldepth; 
+            
+            
+            
+            if (mate != INT16_MAX) {
+                std::cout << " score mate " << mate;
+            } else {
+                std::cout << " score cp " << td.score;
+            }
+            std::cout << " nodes "
                       << nodes << " time " << (int)(time_spent * 1000)
                       << " nps " << (int)(nodes / time_spent) << " pv";
             for (int i = 0; i < td.pv_lengths[0]; i++) {
@@ -157,6 +198,7 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
             }
             std::cout << std::endl;
         }
+
 
         // check soft node limit
         uint64_t nodes =
@@ -207,6 +249,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
     std::optional<TTable::Entry> probe = td.gs->tt.probe(td.board.hash());
 
     if (probe.has_value()) {
+        probe->score = scoreFromTT(probe->score, ply);
 
         if (!is_root && probe->depth >= depth && (depth == 0 || !is_pv)) {
             if (probe->bd == TTable::EXACT) {
@@ -387,7 +430,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         TTable::Entry entry;
         entry.depth = depth;
         entry.best_move = best_move.move();
-        entry.score = best_score;
+        entry.score = scoreToTT(best_score, ply);
         entry.bd =
             best_score >= beta
                 ? TTable::LOWER
@@ -422,6 +465,7 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
     std::optional<TTable::Entry> probe = td.gs->tt.probe(td.board.hash());
 
     if (probe.has_value()) {
+        probe->score = scoreFromTT(probe->score, ply);
 
         if (alpha == beta - 1) {
             if (probe->bd == TTable::EXACT) {
@@ -488,7 +532,7 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
 
     TTable::Entry entry;
     entry.depth = 0;
-    entry.score = best_score;
+    entry.score = scoreToTT(best_score, ply);
     entry.bd = best_score >= beta
                    ? TTable::LOWER
                    : (best_score <= alpha_orig ? TTable::UPPER : TTable::EXACT);
@@ -507,10 +551,10 @@ int16_t evaluate(threaddata &td, int16_t ply) {
     int32_t score = 0;
     if (td.board.sideToMove() == Color::WHITE) {
         score = NNUE::evaluate(&td.ss[ply].accums[0], &td.ss[ply].accums[1],
-                              td.board.all().count());
+                              td.board.occ().count());
     } else {
         score = NNUE::evaluate(&td.ss[ply].accums[1], &td.ss[ply].accums[0],
-                              td.board.all().count());
+                              td.board.occ().count());
     }
 
     score = std::clamp(score, -CHECKMATE + ply, CHECKMATE - ply);
