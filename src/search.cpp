@@ -597,7 +597,7 @@ bool countNode(threaddata &td) {
         }
 
         // still have a max node limit but increase it when using softnodes
-        if (td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes * 4) {
+        if (td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes * 100) {
             td.gs->thread_stop.store(true, std::memory_order_relaxed);
             return false;
         }
