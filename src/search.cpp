@@ -42,11 +42,11 @@ static int16_t scoreFromTT(int16_t score, int16_t ply) {
 std::vector<threaddata> tds;
 
 int convert_mate(int16_t score) {
-    if (score > CHECKMATE - 1000) {
+    if (score > CHECKMATE - MAX_PLY) {
         int ply_to_mate = CHECKMATE - score;
         return (ply_to_mate + 1) / 2;
     }
-    if (score < -CHECKMATE + 1000) {
+    if (score < -CHECKMATE + MAX_PLY) {
         int ply_to_mate = score + CHECKMATE;
         return -(((ply_to_mate) + 1) / 2);
     }
@@ -613,9 +613,6 @@ bool countNode(threaddata &td) {
 }
 
 void performMove(threaddata &td, Move move, sstack_data *ss) {
-
-    // (ss + 1)->accums[0] = ss->accums[0];
-    // (ss + 1)->accums[1] = ss->accums[1];
 
     Piece from = td.board.at(move.from());
     Piece to = td.board.at(move.to());
