@@ -429,7 +429,10 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
     if (ply != 0) {
         TTable::Entry entry;
         entry.depth = depth;
-        entry.best_move = best_move.move();
+        entry.best_move =
+            best_move != Move::NO_MOVE && td.board.isLegal(best_move)
+                ? best_move.move()
+                : Move::NO_MOVE;
         entry.score = scoreToTT(best_score, ply);
         entry.bd =
             best_score >= beta
@@ -548,7 +551,10 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
                    ? TTable::LOWER
                    : (best_score <= alpha_orig ? TTable::UPPER : TTable::EXACT);
     entry.best_move =
-        (entry.bd == TTable::UPPER) ? Move::NO_MOVE : best_move.move();
+        (entry.bd == TTable::UPPER || best_move == Move::NO_MOVE ||
+         !td.board.isLegal(best_move))
+            ? Move::NO_MOVE
+            : best_move.move();
     entry.key = td.board.hash();
 
     if (!td.gs->thread_stop.load(std::memory_order_relaxed)) {
@@ -569,7 +575,7 @@ int16_t evaluate(threaddata &td, int16_t ply) {
                               td.board.occ().count());
     }
 
-    score = std::clamp(score, -CHECKMATE + ply, CHECKMATE - ply);
+    score = std::clamp(score, -CHECKMATE + MAX_PLY + 1, CHECKMATE - MAX_PLY - 1);
 
     return score;
 }
