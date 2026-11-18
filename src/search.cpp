@@ -206,10 +206,10 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
             break;
         }
 
-        if (mate != INT16_MAX) {
-            td.gs->thread_stop.store(true, std::memory_order_relaxed);
-            break;
-        }
+        // if (mate != INT16_MAX) {
+        //     td.gs->thread_stop.store(true, std::memory_order_relaxed);
+        //     break;
+        // }
     }
 }
 
@@ -439,6 +439,17 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         if (!td.gs->thread_stop.load(std::memory_order_relaxed)) {
             td.gs->tt.store(entry);
         }
+    } else if (td.pv_lengths[0] == 0){
+        if (best_move != Move::NO_MOVE) {
+            td.pv[ply][0] = best_move;
+            for (int j = 0; j < td.pv_lengths[ply + 1]; j++) {
+                td.pv[ply][j + 1] = td.pv[ply + 1][j];
+            }
+            td.pv_lengths[ply] = td.pv_lengths[ply + 1] + 1;
+        } else {
+            std::cout << "failed to find move! terminating!" << std::endl;
+            exit(1);
+        }
     }
 
     return best_score;
@@ -539,6 +550,7 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
     entry.best_move =
         (entry.bd == TTable::UPPER) ? Move::NO_MOVE : best_move.move();
     entry.key = td.board.hash();
+
     if (!td.gs->thread_stop.load(std::memory_order_relaxed)) {
         td.gs->tt.store(entry);
     }
