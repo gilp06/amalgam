@@ -30,10 +30,10 @@ static int16_t scoreToTT(int16_t score, int16_t ply) {
 }
 
 static int16_t scoreFromTT(int16_t score, int16_t ply) {
-    if (score > CHECKMATE - 1000) {
+    if (score > CHECKMATE - MAX_PLY) {
         return score - ply;
     }
-    if (score < -CHECKMATE + 1000) {
+    if (score < -CHECKMATE + MAX_PLY) {
         return score + ply;
     }
     return score;
@@ -97,13 +97,8 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
         tds[i].gs->thread_stop.store(true, std::memory_order_relaxed);
     }
 
-    // pick the thread that went the deepest and use its best move
-    int best_thread = 0;
-    for (int i = 1; i < gs->num_threads; i++) {
-        if (tds[i].seldepth > tds[best_thread].seldepth) {
-            best_thread = i;
-        }
-    }
+    // pick the thread to use, for now use thread 0 since it can potentially have the checkmate
+    int best_thread = 0; 
 
     if (!suppress_output) {
         std::cout << "bestmove "
@@ -207,6 +202,11 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
             td.tm->node_batch_size;
         
         if (td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
+            td.gs->thread_stop.store(true, std::memory_order_relaxed);
+            break;
+        }
+
+        if (mate != INT16_MAX) {
             td.gs->thread_stop.store(true, std::memory_order_relaxed);
             break;
         }
