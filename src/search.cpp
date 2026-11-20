@@ -115,7 +115,13 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
         tds[i].nodes = 0;
         tds[i].worker = i != 0;
         tds[i].seldepth = 0;
+        tds[i].score = 0;
+        tds[i].final_pv_length = 0;
+        tds[i].completed_depth = 0;
 
+        std::fill(tds[i].final_pv, tds[i].final_pv + MAX_PLY,
+                  Move::NO_MOVE);
+        
         std::fill(&(tds[i].pv_array[0][0]), &(tds[i].pv_array[0][0]) + MAX_PLY * MAX_PLY,
                   Move::NO_MOVE);
         std::fill(tds[i].pv_lengths, tds[i].pv_lengths + MAX_PLY, 0);
