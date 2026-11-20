@@ -137,6 +137,7 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
 
 void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_output) {
     threaddata &td = td_ref.get();
+    
     int16_t cur_depth = 1;
     while (true) {
         // clear PV lengths and history heuristic
