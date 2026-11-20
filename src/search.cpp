@@ -69,6 +69,33 @@ bool is_better_thread(const threaddata& cur, const threaddata& best) {
     return false;
 }
 
+void print_info_string(const threaddata& td) {
+
+    int16_t mate = convert_mate(td.score);
+
+    double time_spent =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                        td.tm->start)
+            .count();
+    uint64_t nodes =
+        td.gs->nodes_searched.load(std::memory_order_relaxed);
+    std::cout << "info depth " << td.completed_depth << " seldepth " << td.seldepth; 
+
+    if (mate != INT16_MAX) {
+        std::cout << " score mate " << mate;
+    } else {
+        std::cout << " score cp " << td.score;
+    }
+    std::cout << " nodes "
+                << nodes << " time " << (int)(time_spent * 1000)
+                << " nps " << (int)(nodes / time_spent) << " pv";
+    for (int i = 0; i < td.final_pv_length; i++) {
+        std::cout << " "
+                    << uci::moveToUci(td.final_pv[i], td.board.chess960());
+    }
+    std::cout << std::endl;
+}
+
 void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
@@ -89,7 +116,7 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
         tds[i].worker = i != 0;
         tds[i].seldepth = 0;
 
-        std::fill(&(tds[i].pv[0][0]), &(tds[i].pv[0][0]) + MAX_PLY * MAX_PLY,
+        std::fill(&(tds[i].pv_array[0][0]), &(tds[i].pv_array[0][0]) + MAX_PLY * MAX_PLY,
                   Move::NO_MOVE);
         std::fill(tds[i].pv_lengths, tds[i].pv_lengths + MAX_PLY, 0);
         std::fill(tds[i].ss, tds[i].ss + MAX_PLY, sstack_data());
@@ -125,11 +152,13 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
     }
 
     if (!suppress_output) {
+        print_info_string(tds[best_thread]);
+
         std::cout << "bestmove "
-                  << uci::moveToUci(tds[best_thread].best_move, tds[best_thread].board.chess960());
-        if (tds[best_thread].ponder != Move::NO_MOVE) {
+                  << uci::moveToUci(tds[best_thread].final_pv[0], tds[best_thread].board.chess960());
+        if (tds[best_thread].final_pv_length > 1) {
             std::cout << " ponder "
-                      << uci::moveToUci(tds[best_thread].ponder, tds[best_thread].board.chess960());
+                      << uci::moveToUci(tds[best_thread].final_pv[1], tds[best_thread].board.chess960());
         }
         std::cout << std::endl;
     }
@@ -137,7 +166,7 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
 
 void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_output) {
     threaddata &td = td_ref.get();
-    
+
     int16_t cur_depth = 1;
     while (true) {
         // clear PV lengths and history heuristic
@@ -168,10 +197,12 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
 
             if (score > alpha && score < beta) {
                 td.score = score;
+                td.completed_depth = cur_depth;
                 cur_depth++;
-                td.best_move = td.pv[0][0];
-                if (td.pv_lengths[0] > 1)
-                    td.ponder = td.pv[0][1];
+                for (int i = 0; i < td.pv_lengths[0]; i++) {
+                    td.final_pv[i] = td.pv_array[0][i];
+                }
+                td.final_pv_length = td.pv_lengths[0];
                 break;
             }
 
@@ -194,31 +225,8 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
         }
 
         if (main && !suppress_output) {
-            double time_spent =
-                std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                              td.tm->start)
-                    .count();
-            uint64_t nodes =
-                td.gs->nodes_searched.load(std::memory_order_relaxed);
-            std::cout << "info depth " << cur_depth - 1 << " seldepth " << td.seldepth; 
-            
-            
-            
-            if (mate != INT16_MAX) {
-                std::cout << " score mate " << mate;
-            } else {
-                std::cout << " score cp " << td.score;
-            }
-            std::cout << " nodes "
-                      << nodes << " time " << (int)(time_spent * 1000)
-                      << " nps " << (int)(nodes / time_spent) << " pv";
-            for (int i = 0; i < td.pv_lengths[0]; i++) {
-                std::cout << " "
-                          << uci::moveToUci(td.pv[0][i], td.board.chess960());
-            }
-            std::cout << std::endl;
+            print_info_string(td);
         }
-
 
         // check soft node limit
         uint64_t nodes =
@@ -411,9 +419,9 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
             if (score > alpha) {
                 alpha = score;
 
-                td.pv[ply][0] = m;
+                td.pv_array[ply][0] = m;
                 for (int j = 0; j < td.pv_lengths[ply + 1]; j++) {
-                    td.pv[ply][j + 1] = td.pv[ply + 1][j];
+                    td.pv_array[ply][j + 1] = td.pv_array[ply + 1][j];
                 }
                 td.pv_lengths[ply] = td.pv_lengths[ply + 1] + 1;
 
