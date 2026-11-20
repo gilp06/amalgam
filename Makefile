@@ -4,7 +4,7 @@ CPPFLAGS ?= -I../deps/chess-library -I../deps/incbin
 
 SOURCES := $(wildcard src/*.cpp)
 HEADERS := $(wildcard src/*.h deps/*/*.h)
-NNUE := nnue/selfgen-v2.bin
+NNUE := nnue/datagen-v2-256-80.bin
 EXE ?= amalgam
 
 ifeq ($(OS),Windows_NT)
