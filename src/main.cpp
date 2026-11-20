@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
     }
 
 
-    TTable table(1024);
+    TTable table(128);
     globalstate gs = {
         chess::Board(),
         true,

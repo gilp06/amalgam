@@ -93,6 +93,7 @@ struct threaddata {
     chess::Move best_move, ponder;
 
     int16_t seldepth;
+    int16_t completed_depth;
     int16_t score;
 };
 
