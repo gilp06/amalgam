@@ -53,6 +53,22 @@ int convert_mate(int16_t score) {
     return INT16_MAX;
 }
 
+bool is_better_thread(const threaddata& cur, const threaddata& best) {
+    bool cur_mating = cur.score > CHECKMATE - MAX_PLY;
+    bool best_mating = best.score > CHECKMATE - MAX_PLY;
+
+    if (cur_mating && cur.score > best.score)
+        return true;
+
+    if (cur.completed_depth > best.completed_depth)
+        return cur.score > best.score || !best_mating;
+
+    if (cur.completed_depth == best.completed_depth)
+        return cur.score > best.score;
+
+    return false;
+}
+
 void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
@@ -97,8 +113,16 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
         tds[i].gs->thread_stop.store(true, std::memory_order_relaxed);
     }
 
-    // pick the thread to use, for now use thread 0 since it can potentially have the checkmate
-    int best_thread = 0; 
+    // thread voting! based on ethereal
+    // we should pick the deepest thread, unless we have found checkmate
+    // in that case we should probably pick the thread that has the fastest mate
+    // if its the same depth, pick the one that has a better score for us
+    size_t best_thread = 0;
+    for (int i = 1; i < gs->num_threads; i++) {
+        if (is_better_thread(tds[i], tds[best_thread])){
+            best_thread = i;
+        }
+    }
 
     if (!suppress_output) {
         std::cout << "bestmove "
