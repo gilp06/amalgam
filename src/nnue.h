@@ -6,7 +6,7 @@
 #include <immintrin.h>
 #include <incbin.h>
 
-#define NNUE_PATH "../nnue/datagen-v1-256-80.bin"
+#define NNUE_PATH "../nnue/datagen-v2-256-80.bin"
 #define HIDDEN_SIZE 256
 #define SCALE 400
 #define BUCKET_COUNT 1
