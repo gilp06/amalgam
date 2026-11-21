@@ -196,7 +196,7 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
                 beta = td.score + delta;
             }
 
-            int16_t score = alphabeta<PV_NODE>(td, alpha, beta, cur_depth, 0);
+            int16_t score = alphabeta<PV_NODE>(td, alpha, beta, cur_depth, 0, false);
 
             auto cur_time = std::chrono::steady_clock::now();
             if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
@@ -259,7 +259,7 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
 
 template <nodetype node>
 int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
-                  int16_t ply) {
+                  int16_t ply, bool cut_node) {
 
     if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
         return 0;
@@ -331,7 +331,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
             td.board.makeNullMove();
             int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1,
-                                               depth - 1 - reduction, ply + 1);
+                                               depth - 1 - reduction, ply + 1, false);
             td.board.unmakeNullMove();
 
             // If we need to abort
@@ -359,7 +359,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     // if we don't have a hash move while being this deep, we should have found one by this point.
     // So reduce the depth since this is unlikely to be good move.
     int root_reductions = 0;
-    if (depth >= 8 && (is_pv) && (!probe.has_value() || (!tt_move.has_value() || probe->depth + 4 < depth))) {
+    if (depth >= 8 && (is_pv || cut_node) && (!probe.has_value() || (!tt_move.has_value() || probe->depth + 4 < depth))) {
         root_reductions += 1;
     }
 
@@ -427,30 +427,25 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         played++;
 
         int16_t score;
+
         if (played == 1) {
-            score = -alphabeta<node>(td, -beta, -alpha, depth - 1 - root_reductions, ply + 1);
-        } else if (reductions != 0) {
-            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha,
-                                       reduced_depth - 1 - root_reductions, ply + 1);
+            // We assume the first move is the best move
+            score = -alphabeta<node>(td, -beta, -alpha, depth - 1 - root_reductions, ply + 1, !is_pv && !cut_node);
+        } else {
+            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions, ply + 1, true);
 
             if (score > alpha && reductions > 0) {
-                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions,
-                                           ply + 1);
+                // we should probably research from a full depth if this went bad (minus the root reductions)
+                if (score < CHECKMATE - MAX_PLY) {
+                    score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1 - root_reductions, ply + 1, !cut_node);
+                }
             }
 
-            if (score > alpha && score < beta) {
-                score =
-                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1 - root_reductions, ply + 1);
-            }
-
-        } else {
-            score =
-                -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions, ply + 1);
-            if (score > alpha && score < beta) {
-                score =
-                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1 - root_reductions, ply + 1);
+            if (score > alpha && score < beta){
+                score = -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1 - root_reductions, ply + 1, false);
             }
         }
+
         td.board.unmakeMove(m);
 
         
