@@ -390,6 +390,14 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                 // skip the rest of the quiet moves
                 ms.skipQuiets = true;
             }
+
+
+            // Futility Pruning
+            int16_t futility_margin = 80 + 100 * depth;
+            // don't prune if the move gives check
+            if (is_quiet && reduced_depth < 12 && static_eval + futility_margin <= alpha && !is_checking) {
+                ms.skipQuiets = true;
+            }
         }
 
         
