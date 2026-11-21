@@ -385,9 +385,8 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         // We should never prune while within a PV, or in check/being mated
         if (ply != 0 && !is_pv && !in_check && best_score > -CHECKMATE + MAX_PLY) {
 
-            int16_t pdepth = std::clamp(depth, (int16_t)0, (int16_t)12);
             // Late Move Pruning
-            if (reduced_depth < 8 && played >= 0.5 + 0.8 * pdepth * pdepth) {
+            if (reduced_depth < 8 && played >= 2 + 2 * depth * depth) {
                 // skip the rest of the quiet moves
                 ms.skipQuiets = true;
             }
