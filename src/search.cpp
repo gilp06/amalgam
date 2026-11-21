@@ -70,13 +70,10 @@ bool is_better_thread(const thread_data& cur, const thread_data& best) {
 }
 
 void print_info_string(const thread_data& td) {
-
     int16_t mate = convert_mate(td.score);
 
-    double time_spent =
-        std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                        td.tm->start)
-            .count();
+    double time_spent = std::chrono::duration<double>(std::chrono::steady_clock::now() - td.tm->start_time).count();
+
     uint64_t nodes =
         td.gs->nodes_searched.load(std::memory_order_relaxed);
     std::cout << "info depth " << td.completed_depth << " seldepth " << td.seldepth; 
@@ -99,7 +96,7 @@ void print_info_string(const thread_data& td) {
 void startSearch(globalstate *gs, search_params *params, bool suppress_output) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
-    time_manager tm(*params, gs->board.sideToMove(), gs->num_threads);
+    time_manager tm(*params, gs->board.sideToMove());
     Accumulator initial_accums[2];
     initial_accums[0] = LOADED_NNUE->feature_biases;
     initial_accums[1] = LOADED_NNUE->feature_biases;
@@ -113,6 +110,7 @@ void startSearch(globalstate *gs, search_params *params, bool suppress_output) {
         tds[i].board = chess::Board(gs->board);
 
         tds[i].nodes = 0;
+        tds[i].pending_nodes = 0;
         tds[i].worker = i != 0;
         tds[i].seldepth = 0;
         tds[i].score = 0;
@@ -140,6 +138,10 @@ void startSearch(globalstate *gs, search_params *params, bool suppress_output) {
     // wait for all threads to finish
     for (auto &worker : workers) {
         worker.join();
+    }
+
+    for (int i = 0; i < gs->num_threads; i++) {
+        tds[i].flush_nodes();
     }
 
     for (int i = 1; i < gs->num_threads; i++) {
@@ -179,7 +181,7 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
         std::fill(td.pv_lengths, td.pv_lengths + MAX_PLY, 0);
         td.history_heuristic = history_heuristic_table();
 
-        if (td.tm->max_depth != 0 && cur_depth > td.tm->max_depth) {
+        if (td.tm->depth_limit.has_value() && cur_depth > td.tm->depth_limit.value()) {
             td.gs->thread_stop.store(true, std::memory_order_relaxed);
             break;
         }
@@ -196,7 +198,11 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
 
             int16_t score = alphabeta<PV_NODE>(td, alpha, beta, cur_depth, 0);
 
-            if (checkStatus(td)) {
+            auto cur_time = std::chrono::steady_clock::now();
+            if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
+                break;
+            }
+            if (td.tm->hit_hard_limit(td.gs->nodes_searched.load(std::memory_order_relaxed), cur_time)) {
                 td.gs->thread_stop.store(true, std::memory_order_relaxed);
                 break;
             }
@@ -213,36 +219,35 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
             }
 
             if (score <= alpha) {
-                // std::cout << "a.w. fail low" << std::endl;
                 beta = (alpha + beta) / 2;
                 alpha = MAX(-INF, alpha - delta);
             }
             if (score >= beta) {
-                // std::cout << "a.w. fail high" << std::endl;
                 beta = MIN(INF, beta + delta);
             }
 
             delta = delta + delta / 2;
         }
+
+        // flush at end of depth
+        td.flush_nodes();
         int16_t mate = convert_mate(td.score);
 
         if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
             break;
         }
 
-        if (main && !suppress_output) {
-            print_info_string(td);
-        }
+        if (main) {
+            if (!suppress_output) {
+                print_info_string(td);
+            }
 
-        // check soft node limit
-        uint64_t nodes =
-            td.gs->nodes_searched.fetch_add(td.tm->node_batch_size,
-                                            std::memory_order_relaxed) +
-            td.tm->node_batch_size;
-        
-        if (td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
-            td.gs->thread_stop.store(true, std::memory_order_relaxed);
-            break;
+            td.tm->update_soft_time_limit(td.final_pv[0], td.score);
+            
+            if (td.tm->hit_soft_limit(td.gs->nodes_searched.load(std::memory_order_relaxed), std::chrono::steady_clock::now())) {
+                td.gs->thread_stop.store(true, std::memory_order_relaxed);
+                break;
+            }
         }
 
         if (mate != INT16_MAX) {
@@ -256,14 +261,19 @@ template <nodetype node>
 int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                   int16_t ply) {
 
-    depth = MAX(0, depth);
-    bool is_pv = (node == PV_NODE);
-    bool is_root = (ply == 0);
+    if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
+        return 0;
+    }
 
-    if (checkStatus(td) || !countNode(td)) {
+    if (td.nodes % 1024 == 0 && td.tm->hit_hard_limit(td.gs->nodes_searched.load(std::memory_order_relaxed), std::chrono::steady_clock::now())) {
         td.gs->thread_stop.store(true, std::memory_order_relaxed);
         return 0;
     }
+
+    td.count_node();
+    depth = MAX(0, depth);
+    bool is_pv = (node == PV_NODE);
+    bool is_root = (ply == 0);
 
     if (ply >= MAX_PLY - 1) {
         return evaluate(td, ply);
@@ -506,10 +516,16 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 }
 
 int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
-    if (checkStatus(td) || !countNode(td)) {
+    if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
+        return 0;
+    }
+
+    if (td.nodes % 1024 == 0 && td.tm->hit_hard_limit(td.gs->nodes_searched.load(std::memory_order_relaxed), std::chrono::steady_clock::now())) {
         td.gs->thread_stop.store(true, std::memory_order_relaxed);
         return 0;
     }
+
+    td.count_node();
 
     if (ply >= MAX_PLY - 1) {
         return evaluate(td, ply);
@@ -624,50 +640,6 @@ int16_t evaluate(thread_data &td, int16_t ply) {
     score = std::clamp(score, -CHECKMATE + MAX_PLY + 1, CHECKMATE - MAX_PLY - 1);
 
     return score;
-}
-
-bool checkStatus(thread_data &td) {
-    if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
-        return true;
-    }
-
-    if ((td.nodes & 2047) == 0) {
-        if (td.tm->max_search_time != 0) {
-            double time_spent =
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - td.tm->start)
-                    .count();
-            if (time_spent >= td.tm->max_search_time) {
-                td.gs->thread_stop.store(true, std::memory_order_relaxed);
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-bool countNode(thread_data &td) {
-    td.nodes++;
-    if (td.nodes % td.tm->node_batch_size == 0) {
-        uint64_t nodes =
-            td.gs->nodes_searched.fetch_add(td.tm->node_batch_size,
-                                            std::memory_order_relaxed) +
-            td.tm->node_batch_size;
-        // only stop the search if we are not in softnodes mode and we have a max node limit
-        if (!td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes) {
-            td.gs->thread_stop.store(true, std::memory_order_relaxed);
-            return false;
-        }
-
-        // still have a max node limit but increase it when using softnodes
-        if (td.gs->softnodes && td.tm->max_nodes != 0 && nodes >= td.tm->max_nodes * 100) {
-            td.gs->thread_stop.store(true, std::memory_order_relaxed);
-            return false;
-        }
-    }
-
-    return true;
 }
 
 void performMove(thread_data &td, Move move, sstack_data *ss) {
