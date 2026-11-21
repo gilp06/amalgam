@@ -358,8 +358,9 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     // Interal Iterative Reduction
     // if we don't have a hash move while being this deep, we should have found one by this point.
     // So reduce the depth since this is unlikely to be good move.
-    if (depth >= 8 && (is_pv) && (tt_move == Move::NO_MOVE || (probe.has_value() && probe->depth + 4 < depth))) {
-        depth -= 1;
+    int root_reductions = 0;
+    if (depth >= 8 && (is_pv) && (!probe.has_value() || (!tt_move.has_value() || probe->depth + 4 < depth))) {
+        root_reductions += 1;
     }
 
 
@@ -427,27 +428,27 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
         int16_t score;
         if (played == 1) {
-            score = -alphabeta<node>(td, -beta, -alpha, depth - 1, ply + 1);
+            score = -alphabeta<node>(td, -beta, -alpha, depth - 1 - root_reductions, ply + 1);
         } else if (reductions != 0) {
             score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha,
-                                       reduced_depth - 1, ply + 1);
+                                       reduced_depth - 1 - root_reductions, ply + 1);
 
             if (score > alpha && reductions > 0) {
-                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1,
+                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions,
                                            ply + 1);
             }
 
             if (score > alpha && score < beta) {
                 score =
-                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1, ply + 1);
+                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1 - root_reductions, ply + 1);
             }
 
         } else {
             score =
-                -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1, ply + 1);
+                -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions, ply + 1);
             if (score > alpha && score < beta) {
                 score =
-                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1, ply + 1);
+                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1 - root_reductions, ply + 1);
             }
         }
         td.board.unmakeMove(m);
