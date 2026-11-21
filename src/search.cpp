@@ -386,7 +386,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         if (ply != 0 && !is_pv && !in_check && best_score > -CHECKMATE + MAX_PLY) {
 
             // Late Move Pruning
-            if (reduced_depth < 8 && played >= 2 + 2 * depth * depth) {
+            if (reduced_depth < 8 && played >= 4 + 2 * depth) {
                 // skip the rest of the quiet moves
                 ms.skipQuiets = true;
             }
