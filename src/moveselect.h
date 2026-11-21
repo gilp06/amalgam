@@ -16,8 +16,8 @@ enum MoveSelectStage {
 
 
 #define MAX_HISTORY 25000
-using HistoryHeuristicTable = std::array<std::array<std::array<int16_t, 64>, 64>, 2>;
-void UpdateHistoryHeuristic(HistoryHeuristicTable& historyHeuristic, chess::Color stm, chess::Move move, int16_t bonus);
+using history_heuristic_table = std::array<std::array<std::array<int16_t, 64>, 64>, 2>;
+void UpdateHistoryHeuristic(history_heuristic_table& historyHeuristic, chess::Color stm, chess::Move move, int16_t bonus);
 
 const extern int16_t SEEPawn;
 const extern int16_t SEEKnight;
@@ -29,7 +29,8 @@ class MoveSelect {
     public:
         PinnersBlockersStruct pb[2];
         MoveSelectStage stage;
-        MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, const HistoryHeuristicTable* historyHeuristic = nullptr, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt);
+        bool skipQuiets;
+        MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, const history_heuristic_table* historyHeuristic = nullptr, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt);
         chess::Move next();
     private:
         chess::Movelist moves, quietMoves;
@@ -37,9 +38,8 @@ class MoveSelect {
         size_t quiet_index;
         std::optional<chess::Move> ttMove;
         std::optional<std::array<chess::Move, 2>> killers;
-        const HistoryHeuristicTable* historyHeuristic;
+        const history_heuristic_table* historyHeuristic;
         const chess::Board& board;
-        bool skipQuiets;
 };
 
 extern const int16_t MVVValues[7][7];

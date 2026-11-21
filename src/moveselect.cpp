@@ -24,7 +24,7 @@ const int16_t MVVValues[7][7] = {
     33, 34, 35, 0,  40, 41, 42, 43, 44, 45, 0,  50, 51, 52, 53, 54, 55,
     0,  60, 61, 62, 63, 64, 65, 0,  0,  0,  0,  0,  0,  0,  0};
 
-void UpdateHistoryHeuristic(HistoryHeuristicTable &historyHeuristic,
+void UpdateHistoryHeuristic(history_heuristic_table &historyHeuristic,
                             chess::Color stm, chess::Move move,
                             int16_t bonus) {
     int16_t clampedBonus = CLAMP(bonus, -MAX_HISTORY, MAX_HISTORY);
@@ -122,7 +122,7 @@ bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
 }
 MoveSelect::MoveSelect(const chess::Board &board,
                        std::optional<chess::Move> ttMove,
-                       const HistoryHeuristicTable *historyHeuristic,
+                       const history_heuristic_table *historyHeuristic,
                        bool skipQuiets,
                        std::optional<std::array<chess::Move, 2>> killers)
     : board(board), skipQuiets(skipQuiets), ttMove(ttMove), killers(killers),
@@ -204,6 +204,10 @@ Move MoveSelect::next() {
 
     if (stage == MoveSelectStage::GenQuiets) {
         // std::cout << "Gen Quiets" << std::endl;
+        if (skipQuiets) {
+            stage = MoveSelectStage::BadCaptures;
+            return next();
+        }
         movegen::legalmoves<movegen::MoveGenType::QUIET>(quietMoves, board);
         stage = MoveSelectStage::Quiets;
 
@@ -224,6 +228,12 @@ Move MoveSelect::next() {
     }
 
     if (stage == MoveSelectStage::Quiets) {
+
+        if (skipQuiets) {
+            stage = MoveSelectStage::BadCaptures;
+            return next();
+        }
+
         // std::cout << "Quiets" << std::endl;
         while (quiet_index < quietMoves.size()) {
             size_t best_index = quiet_index;

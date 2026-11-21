@@ -39,7 +39,7 @@ static int16_t scoreFromTT(int16_t score, int16_t ply) {
     return score;
 }
 
-std::vector<threaddata> tds;
+std::vector<thread_data> tds;
 
 int convert_mate(int16_t score) {
     if (score > CHECKMATE - MAX_PLY) {
@@ -53,7 +53,7 @@ int convert_mate(int16_t score) {
     return INT16_MAX;
 }
 
-bool is_better_thread(const threaddata& cur, const threaddata& best) {
+bool is_better_thread(const thread_data& cur, const thread_data& best) {
     bool cur_mating = cur.score > CHECKMATE - MAX_PLY;
     bool best_mating = best.score > CHECKMATE - MAX_PLY;
 
@@ -69,7 +69,7 @@ bool is_better_thread(const threaddata& cur, const threaddata& best) {
     return false;
 }
 
-void print_info_string(const threaddata& td) {
+void print_info_string(const thread_data& td) {
 
     int16_t mate = convert_mate(td.score);
 
@@ -96,10 +96,10 @@ void print_info_string(const threaddata& td) {
     std::cout << std::endl;
 }
 
-void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
+void startSearch(globalstate *gs, search_params *params, bool suppress_output) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
-    timemanager tm(*params, gs->board.sideToMove(), gs->num_threads);
+    time_manager tm(*params, gs->board.sideToMove(), gs->num_threads);
     Accumulator initial_accums[2];
     initial_accums[0] = LOADED_NNUE->feature_biases;
     initial_accums[1] = LOADED_NNUE->feature_biases;
@@ -170,14 +170,14 @@ void startSearch(globalstate *gs, searchparams *params, bool suppress_output) {
     }
 }
 
-void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_output) {
-    threaddata &td = td_ref.get();
+void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress_output) {
+    thread_data &td = td_ref.get();
 
     int16_t cur_depth = 1;
     while (true) {
         // clear PV lengths and history heuristic
         std::fill(td.pv_lengths, td.pv_lengths + MAX_PLY, 0);
-        td.history_heuristic = HistoryHeuristicTable();
+        td.history_heuristic = history_heuristic_table();
 
         if (td.tm->max_depth != 0 && cur_depth > td.tm->max_depth) {
             td.gs->thread_stop.store(true, std::memory_order_relaxed);
@@ -253,7 +253,7 @@ void search(std::reference_wrapper<threaddata> td_ref, bool main, bool suppress_
 }
 
 template <nodetype node>
-int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
+int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                   int16_t ply) {
 
     depth = MAX(0, depth);
@@ -368,16 +368,27 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
         int reductions = 0;
 
         // Late Move Reductions
-        if (played > 1) {
-            if (played >= 3 && depth >= 3 && !in_check && !is_checking &&
-                !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
-                if (is_quiet) {
-                    reductions +=
-                        (int16_t)(0.8 + log(played) * log(depth) / 2.5);
-                } else {
-                    reductions +=
-                        (int16_t)(0.4 + log(played) * log(depth) / 3.5);
-                }
+        if (played >= 3 && depth >= 3 && !in_check && !is_checking &&
+            !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
+            if (is_quiet) {
+                reductions +=
+                    (int16_t)(0.8 + log(played) * log(depth) / 2.5);
+            } else {
+                reductions +=
+                    (int16_t)(0.4 + log(played) * log(depth) / 3.5);
+            }
+        }
+
+        int16_t reduced_depth = depth - reductions;
+
+        // Pruning 
+        // We should never prune while within a PV, or in check/being mated
+        if (ply != 0 && !is_pv && !in_check && best_score > -CHECKMATE + MAX_PLY) {
+
+            // Late Move Pruning
+            if (reduced_depth < 8 && played >= 3 + 1.5 * depth * depth) {
+                // skip the rest of the quiet moves
+                ms.skipQuiets = true;
             }
         }
 
@@ -391,24 +402,24 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
             score = -alphabeta<node>(td, -beta, -alpha, depth - 1, ply + 1);
         } else if (reductions != 0) {
             score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha,
-                                       depth - 1 - reductions, ply + 1);
+                                       reduced_depth - 1, ply + 1);
 
             if (score > alpha && reductions > 0) {
-                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1,
+                score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1,
                                            ply + 1);
             }
 
             if (score > alpha && score < beta) {
                 score =
-                    -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
+                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1, ply + 1);
             }
 
         } else {
             score =
-                -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1, ply + 1);
+                -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1, ply + 1);
             if (score > alpha && score < beta) {
                 score =
-                    -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1, ply + 1);
+                    -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1, ply + 1);
             }
         }
         td.board.unmakeMove(m);
@@ -486,7 +497,7 @@ int16_t alphabeta(threaddata &td, int16_t alpha, int16_t beta, int16_t depth,
     return best_score;
 }
 
-int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
+int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
     if (checkStatus(td) || !countNode(td)) {
         td.gs->thread_stop.store(true, std::memory_order_relaxed);
         return 0;
@@ -591,7 +602,7 @@ int16_t quiescence(threaddata &td, int16_t alpha, int16_t beta, int16_t ply) {
     return best_score;
 }
 
-int16_t evaluate(threaddata &td, int16_t ply) {
+int16_t evaluate(thread_data &td, int16_t ply) {
 
     int32_t score = 0;
     if (td.board.sideToMove() == Color::WHITE) {
@@ -607,7 +618,7 @@ int16_t evaluate(threaddata &td, int16_t ply) {
     return score;
 }
 
-bool checkStatus(threaddata &td) {
+bool checkStatus(thread_data &td) {
     if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
         return true;
     }
@@ -628,7 +639,7 @@ bool checkStatus(threaddata &td) {
     return false;
 }
 
-bool countNode(threaddata &td) {
+bool countNode(thread_data &td) {
     td.nodes++;
     if (td.nodes % td.tm->node_batch_size == 0) {
         uint64_t nodes =
@@ -651,7 +662,7 @@ bool countNode(threaddata &td) {
     return true;
 }
 
-void performMove(threaddata &td, Move move, sstack_data *ss) {
+void performMove(thread_data &td, Move move, sstack_data *ss) {
 
     Piece from = td.board.at(move.from());
     Piece to = td.board.at(move.to());

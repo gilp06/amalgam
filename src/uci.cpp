@@ -11,7 +11,7 @@
 #include "search.h"
 #include "utils.h"
 
-searchparams params = {};
+search_params params = {};
 std::thread search_thread;
 
 static void stopSearch(globalstate *gs) {
@@ -312,7 +312,7 @@ void bench() {
         TTable ttable(16);
         globalstate gs = {chess::Board(fen), true, 0, false, false, 1, ttable};
 
-        searchparams params = {};
+        search_params params = {};
         params.max_depth = 10;
         gs.thread_stop = false;
         startSearch(&gs, &params, true); // run search in the main thread

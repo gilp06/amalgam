@@ -16,7 +16,7 @@ enum nodetype {
     NORMAL
 };
 
-struct searchparams {
+struct search_params {
     uint64_t max_depth = 0;
     uint64_t max_nodes = 0;
     uint64_t wtime = 0;
@@ -27,14 +27,14 @@ struct searchparams {
     uint64_t align = 0;
 };
 
-struct timemanager {
+struct time_manager {
     std::chrono::steady_clock::time_point start;
     uint64_t max_search_time = 0;
     uint64_t max_nodes = 0;
     uint64_t max_depth = 0;
     uint64_t node_batch_size = 256;
 
-    explicit timemanager(const searchparams& params, chess::Color stm,
+    explicit time_manager(const search_params& params, chess::Color stm,
                          uint64_t thread_count = 1) {
         start = std::chrono::steady_clock::now();
         if (params.max_depth != 0)
@@ -78,11 +78,11 @@ struct sstack_data {
     Accumulator accums[2];
 };
 
-struct threaddata {
+struct thread_data {
     bool worker;
-    HistoryHeuristicTable history_heuristic;
+    history_heuristic_table history_heuristic;
     globalstate* gs;
-    const timemanager* tm;
+    const time_manager* tm;
     chess::Board board;
     int64_t nodes;
     sstack_data ss[MAX_PLY];
@@ -100,13 +100,13 @@ struct threaddata {
 
 
 
-bool checkStatus(threaddata& td);
-bool countNode(threaddata& td);
-void startSearch(globalstate* gs, searchparams* params, bool suppress_output = false);
-void search(std::reference_wrapper<threaddata> td, bool main, bool suppress_output = false);
-void performMove(threaddata& td, chess::Move move, sstack_data* ss);
-int16_t evaluate(threaddata& td, int16_t ply);
+bool checkStatus(thread_data& td);
+bool countNode(thread_data& td);
+void startSearch(globalstate* gs, search_params* params, bool suppress_output = false);
+void search(std::reference_wrapper<thread_data> td, bool main, bool suppress_output = false);
+void performMove(thread_data& td, chess::Move move, sstack_data* ss);
+int16_t evaluate(thread_data& td, int16_t ply);
 
 template<nodetype node>
-int16_t alphabeta(threaddata& td, int16_t alpha, int16_t beta, int16_t depth, int16_t ply);
-int16_t quiescence(threaddata& td, int16_t alpha, int16_t beta, int16_t ply);
+int16_t alphabeta(thread_data& td, int16_t alpha, int16_t beta, int16_t depth, int16_t ply);
+int16_t quiescence(thread_data& td, int16_t alpha, int16_t beta, int16_t ply);
