@@ -102,6 +102,7 @@ bool UCICommand(globalstate *gs, const std::string &input) {
         stopSearch(gs);
 
         params = {};
+        params.softnodes = gs->softnodes;
 
         while (toks >> token) {
             if (token == "perft") {
