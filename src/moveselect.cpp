@@ -35,7 +35,7 @@ void UpdateHistoryHeuristic(history_heuristic_table &historyHeuristic,
 }
 
 bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
-                               int16_t threshold, PinnersBlockersStruct pb[2]) {
+                               int16_t threshold, pb_struct pb[2]) {
 
     // assume for other move types that the move is good enough to be played,
     // since they are promotions etc.
@@ -120,12 +120,12 @@ bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
 
     return result;
 }
-MoveSelect::MoveSelect(const chess::Board &board,
+move_select::move_select(const chess::Board &board,
                        std::optional<chess::Move> ttMove,
                        const history_heuristic_table *historyHeuristic,
                        bool skipQuiets,
                        std::optional<std::array<chess::Move, 2>> killers)
-    : board(board), skipQuiets(skipQuiets), ttMove(ttMove), killers(killers),
+    : board(board), skip_quiets(skipQuiets), ttMove(ttMove), killers(killers),
       historyHeuristic(historyHeuristic) {
 
     if (this->ttMove.has_value() && !board.isLegal(*this->ttMove)) {
@@ -139,31 +139,31 @@ MoveSelect::MoveSelect(const chess::Board &board,
 
     // skip TT move stage if it doesn't exist
     if (!this->ttMove.has_value()) {
-        stage = MoveSelectStage::GenCaptures;
+        stage = ms_stage::GenCaptures;
     } else {
-        stage = MoveSelectStage::TTMove;
+        stage = ms_stage::TTMove;
     }
 
     index = 0;
     quiet_index = 0;
 }
 
-Move MoveSelect::next() {
+Move move_select::next() {
 
-    if (stage == MoveSelectStage::TTMove) {
+    if (stage == ms_stage::TTMove) {
         // std::cout << "TT Move" << std::endl;
-        stage = MoveSelectStage::GenCaptures;
+        stage = ms_stage::GenCaptures;
         assert(ttMove.has_value());
 
-        if (!skipQuiets || board.isCapture(*ttMove)) {
+        if (!skip_quiets || board.isCapture(*ttMove)) {
             return ttMove.value();
         }
     }
 
-    if (stage == MoveSelectStage::GenCaptures) {
+    if (stage == ms_stage::GenCaptures) {
         // std::cout << "Gen Captures" << std::endl;
         movegen::legalmoves<movegen::MoveGenType::CAPTURE>(moves, board);
-        stage = MoveSelectStage::GoodCaptures;
+        stage = ms_stage::GoodCaptures;
 
         // now score the captures
         for (size_t i = 0; i < moves.size(); i++) {
@@ -177,7 +177,7 @@ Move MoveSelect::next() {
         }
     }
 
-    if (stage == MoveSelectStage::GoodCaptures) {
+    if (stage == ms_stage::GoodCaptures) {
         // std::cout << "Good Captures" << std::endl;
         while (index < moves.size()) {
             size_t best_index = index;
@@ -189,7 +189,7 @@ Move MoveSelect::next() {
             }
 
             if (moves[best_index].score() <= 0) {
-                stage = skipQuiets ? BadCaptures : MoveSelectStage::GenQuiets;
+                stage = skip_quiets ? BadCaptures : ms_stage::GenQuiets;
                 break;
             } else {
                 std::swap(moves[index], moves[best_index]);
@@ -199,17 +199,17 @@ Move MoveSelect::next() {
                 return moves[index - 1];
             }
         }
-        stage = skipQuiets ? BadCaptures : MoveSelectStage::GenQuiets;
+        stage = skip_quiets ? BadCaptures : ms_stage::GenQuiets;
     }
 
-    if (stage == MoveSelectStage::GenQuiets) {
+    if (stage == ms_stage::GenQuiets) {
         // std::cout << "Gen Quiets" << std::endl;
-        if (skipQuiets) {
-            stage = MoveSelectStage::BadCaptures;
+        if (skip_quiets) {
+            stage = ms_stage::BadCaptures;
             return next();
         }
         movegen::legalmoves<movegen::MoveGenType::QUIET>(quietMoves, board);
-        stage = MoveSelectStage::Quiets;
+        stage = ms_stage::Quiets;
 
         for (size_t i = 0; i < quietMoves.size(); i++) {
             if (historyHeuristic != nullptr)
@@ -227,10 +227,10 @@ Move MoveSelect::next() {
         }
     }
 
-    if (stage == MoveSelectStage::Quiets) {
+    if (stage == ms_stage::Quiets) {
 
-        if (skipQuiets) {
-            stage = MoveSelectStage::BadCaptures;
+        if (skip_quiets) {
+            stage = ms_stage::BadCaptures;
             return next();
         }
 
@@ -251,10 +251,10 @@ Move MoveSelect::next() {
             return quietMoves[quiet_index - 1];
         }
 
-        stage = MoveSelectStage::BadCaptures;
+        stage = ms_stage::BadCaptures;
     }
 
-    if (stage == MoveSelectStage::BadCaptures) {
+    if (stage == ms_stage::BadCaptures) {
 
         // std::cout << "Bad Captures" << std::endl;
         // potentially rescore here
@@ -279,14 +279,14 @@ Move MoveSelect::next() {
                 continue;
             return moves[index - 1];
         }
-        stage = MoveSelectStage::Done;
+        stage = ms_stage::Done;
     }
 
-    if (stage == MoveSelectStage::Done) {
+    if (stage == ms_stage::Done) {
         // std::cout << "Done" << std::endl;
         return Move::NO_MOVE;
     }
 
-    stage = MoveSelectStage::Done;
+    stage = ms_stage::Done;
     return Move::NO_MOVE;
 };

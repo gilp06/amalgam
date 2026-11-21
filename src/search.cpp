@@ -346,14 +346,14 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     int16_t best_score = INT16_MIN;
     size_t played = 0;
     ;
-    MoveSelect ms(td.board, tt_move, &td.history_heuristic, false,
+    move_select ms(td.board, tt_move, &td.history_heuristic, false,
                   td.killers[ply]);
     std::array<Move, 256> quietMoves;
     size_t quietCount = 0;
 
     while (true) {
         Move m = ms.next();
-        if (ms.stage == MoveSelectStage::Done)
+        if (ms.stage == ms_stage::Done)
             break;
         assert(m != Move::NO_MOVE);
 
@@ -388,11 +388,19 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
             // Late Move Pruning
             if (reduced_depth < 8 && played >= 3 + 1.5 * depth * depth) {
                 // skip the rest of the quiet moves
-                ms.skipQuiets = true;
+                ms.skip_quiets = true;
+            }
+
+
+            // Futility Pruning
+            int16_t futility_margin = 80 + 100 * depth;
+            // don't prune if the move gives check
+            if (is_quiet && reduced_depth < 12 && static_eval + futility_margin <= alpha && !is_checking) {
+                ms.skip_quiets = true;
             }
         }
 
-        
+         
 
         performMove(td, m, &td.ss[ply]);
         played++;
@@ -547,12 +555,12 @@ int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
         }
     }
 
-    MoveSelect ms(td.board, tt_move, nullptr, !incheck);
+    move_select ms(td.board, tt_move, nullptr, !incheck);
     int16_t played = 0;
 
     while (true) {
         Move m = ms.next();
-        if (ms.stage == MoveSelectStage::Done)
+        if (ms.stage == ms_stage::Done)
             break;
         assert(m != Move::NO_MOVE);
         played++;

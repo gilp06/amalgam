@@ -39,7 +39,7 @@ Bitboard attackers_to_square(const Board& board, Square square, Bitboard occupie
 
 
 // generate pinners belonging to us that pin their pieces to their king, and return them as a bitboard
-PinnersBlockersStruct fetchPinnersBlockers(const Board& board, Color side) {
+pb_struct fetchPinnersBlockers(const Board& board, Color side) {
 
 
     Bitboard us = board.us(side);
