@@ -3,7 +3,7 @@
 
 #include <chess.hpp>
 #include "utils.h"
-enum MoveSelectStage {
+enum ms_stage {
     TTMove,
     GenCaptures,
     GoodCaptures,
@@ -25,12 +25,12 @@ const extern int16_t SEEBishop;
 const extern int16_t SEERook;
 const extern int16_t SEEQueen;
 
-class MoveSelect {
+class move_select {
     public:
-        PinnersBlockersStruct pb[2];
-        MoveSelectStage stage;
-        bool skipQuiets;
-        MoveSelect(const chess::Board& board, std::optional<chess::Move> ttMove, const history_heuristic_table* historyHeuristic = nullptr, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt);
+        pb_struct pb[2];
+        ms_stage stage;
+        bool skip_quiets;
+        move_select(const chess::Board& board, std::optional<chess::Move> ttMove, const history_heuristic_table* historyHeuristic = nullptr, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt);
         chess::Move next();
     private:
         chess::Movelist moves, quietMoves;
@@ -44,4 +44,4 @@ class MoveSelect {
 
 extern const int16_t MVVValues[7][7];
 extern const int16_t SEEPieceValues[14];
-bool StaticExchangeThresholded(const chess::Board& board, chess::Move move, int16_t threshold, PinnersBlockersStruct pb[2]);
+bool StaticExchangeThresholded(const chess::Board& board, chess::Move move, int16_t threshold, pb_struct pb[2]);

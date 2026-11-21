@@ -171,7 +171,7 @@ inline void populateAccums(Accumulator accums[2], const chess::Board &board) {
 //         accums[1]);
 // }
 
-struct PinnersBlockersStruct {
+struct pb_struct {
     chess::Bitboard our_pinners;
     chess::Bitboard their_blockers;
 };
@@ -179,7 +179,7 @@ struct PinnersBlockersStruct {
 chess::Bitboard attackers_to_square(const chess::Board &board,
                                     chess::Square square,
                                     chess::Bitboard occupied);
-PinnersBlockersStruct fetchPinnersBlockers(const chess::Board &board,
+pb_struct fetchPinnersBlockers(const chess::Board &board,
                                            chess::Color us);
 
 extern chess::Bitboard BETWEEN_MASK[64][64];
