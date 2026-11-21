@@ -295,6 +295,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
     std::optional<Move> tt_move = std::nullopt;
     Move best_move = Move::NO_MOVE;
+
     std::optional<TTable::Entry> probe = td.gs->tt.probe(td.board.hash());
 
     if (probe.has_value()) {
@@ -352,6 +353,15 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     if (depth == 0) {
         return quiescence(td, alpha, beta, ply);
     }
+
+
+    // Interal Iterative Reduction
+    // if we don't have a hash move while being this deep, we should have found one by this point.
+    // So reduce the depth since this is unlikely to be good move.
+    if (depth >= 8 && (is_pv) && (tt_move == Move::NO_MOVE || (probe.has_value() && probe->depth + 4 < depth))) {
+        depth -= 1;
+    }
+
 
     int16_t best_score = INT16_MIN;
     size_t played = 0;
