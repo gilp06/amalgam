@@ -4,6 +4,28 @@ This is my chess engine that I started after being somewhat satisfied with [gilp
 
 Currently, to build/run it you will need a processor that supports PEXT and AVX-512.
 
+# Search
+
+Fail-soft AB-pruning engine with the following techniques implemented and tested so far
+- Iterative Deepening with aspiration windows
+- Quiescence Search
+- Move Ordering
+    - Transposition Table Move
+    - Good Captures
+        - Thresholded SEE
+        - Sorted using a MVV table
+    - Quiets
+        - Killer moves
+        - History heuristic sorting
+    - Bad Captures
+- Principal Variation search
+- Lazy SMP and thread voting
+- RFP, NMP, IIR
+- LMR, LMP, FP
+
+The time management soft limit is currently updated per depth based on PV stability
+
+
 # NNUE
 
 The NNUE development on this engine is pretty similar to my previous one.
