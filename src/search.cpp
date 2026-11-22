@@ -591,6 +591,11 @@ int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
         assert(m != Move::NO_MOVE);
         played++;
 
+        // if we found a way to get out of check, we can skip quiet moves
+        if (best_score > -CHECKMATE + MAX_PLY) {
+            ms.skip_quiets = true;
+        } 
+
         performMove(td, m, &td.ss[ply]);
         int16_t score = -quiescence(td, -beta, -alpha, ply + 1);
         td.board.unmakeMove(m);
