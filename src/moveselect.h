@@ -5,12 +5,12 @@
 #include "utils.h"
 enum ms_stage {
     TTMove,
-    GenCaptures,
-    GoodCaptures,
+    GenNoisy,
+    GoodNoisy,
     // Killer Moves,
     GenQuiets,
     Quiets,
-    BadCaptures,
+    BadNoisy,
     Done,
 };
 
