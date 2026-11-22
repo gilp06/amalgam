@@ -377,6 +377,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         if (ms.stage == ms_stage::Done)
             break;
         assert(m != Move::NO_MOVE);
+        
 
         bool is_capture = td.board.isCapture(m);
         bool is_quiet = !is_capture && m.typeOf() != Move::PROMOTION;
@@ -563,6 +564,8 @@ int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
             tt_move = probe->best_move;
     }
 
+    td.pv_lengths[ply] = 0;
+
     int16_t best_score = INT16_MIN;
     bool incheck = td.board.inCheck();
     int16_t stand_pat = 0;
@@ -577,15 +580,21 @@ int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
         }
     }
 
-    move_select ms(td.board, tt_move, nullptr, !incheck);
+    move_select ms(td.board, tt_move, nullptr, !incheck, std::nullopt, -100);
     int16_t played = 0;
 
     while (true) {
         Move m = ms.next();
-        if (ms.stage == ms_stage::Done)
+        // prune bad captures
+        if (ms.stage == ms_stage::Done || ms.stage == ms_stage::BadNoisy)
             break;
         assert(m != Move::NO_MOVE);
         played++;
+
+        // if we found a way to get out of check, we can skip quiet moves
+        if (best_score > -CHECKMATE + MAX_PLY) {
+            ms.skip_quiets = true;
+        } 
 
         performMove(td, m, &td.ss[ply]);
         int16_t score = -quiescence(td, -beta, -alpha, ply + 1);

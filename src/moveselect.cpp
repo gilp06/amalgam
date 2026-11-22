@@ -24,6 +24,24 @@ const int16_t MVVValues[7][7] = {
     33, 34, 35, 0,  40, 41, 42, 43, 44, 45, 0,  50, 51, 52, 53, 54, 55,
     0,  60, 61, 62, 63, 64, 65, 0,  0,  0,  0,  0,  0,  0,  0};
 
+
+
+// essentially treat the change in score if its not a capture
+// to the equivalent of a capture of a pawn (since we are gaining a new material at the cost of a pawn)
+static int16_t scorePromotion(const Board& board, Move move) {
+    if (move.typeOf() != Move::PROMOTION)
+        return 0;
+
+    PieceType victim = board.isCapture(move)
+        ? board.at(move.to()).type()
+        : PieceType::PAWN;
+    return MVVValues[(int)victim][(int)move.promotionType()];
+}
+
+static bool isCaptureOrPromotion(const Board& board, Move move) {
+    return board.isCapture(move) || move.typeOf() == Move::PROMOTION;
+}
+
 void UpdateHistoryHeuristic(history_heuristic_table &historyHeuristic,
                             chess::Color stm, chess::Move move,
                             int16_t bonus) {
@@ -124,9 +142,10 @@ move_select::move_select(const chess::Board &board,
                        std::optional<chess::Move> ttMove,
                        const history_heuristic_table *historyHeuristic,
                        bool skipQuiets,
-                       std::optional<std::array<chess::Move, 2>> killers)
+                       std::optional<std::array<chess::Move, 2>> killers,
+                       int16_t seeThreshold)
     : board(board), skip_quiets(skipQuiets), ttMove(ttMove), killers(killers),
-      historyHeuristic(historyHeuristic) {
+      historyHeuristic(historyHeuristic), seeThreshold(seeThreshold) {
 
     if (this->ttMove.has_value() && !board.isLegal(*this->ttMove)) {
         this->ttMove.reset();
@@ -137,9 +156,9 @@ move_select::move_select(const chess::Board &board,
     pb[(int)Color::BLACK] = fetchPinnersBlockers(board, Color::BLACK);
 
 
-    // skip TT move stage if it doesn't exist
-    if (!this->ttMove.has_value()) {
-        stage = ms_stage::GenCaptures;
+    // skip TT move stage if it doesn't exist or if it is a quiet move and we are skipping quiets
+    if (!this->ttMove.has_value() || (skip_quiets && !isCaptureOrPromotion(board, *this->ttMove))) {
+        stage = ms_stage::GenNoisy;
     } else {
         stage = ms_stage::TTMove;
     }
@@ -151,33 +170,43 @@ move_select::move_select(const chess::Board &board,
 Move move_select::next() {
 
     if (stage == ms_stage::TTMove) {
-        // std::cout << "TT Move" << std::endl;
-        stage = ms_stage::GenCaptures;
+        stage = ms_stage::GenNoisy;
         assert(ttMove.has_value());
-
-        if (!skip_quiets || board.isCapture(*ttMove)) {
-            return ttMove.value();
-        }
+        return ttMove.value();
     }
 
-    if (stage == ms_stage::GenCaptures) {
+    if (stage == ms_stage::GenNoisy) {
         // std::cout << "Gen Captures" << std::endl;
         movegen::legalmoves<movegen::MoveGenType::CAPTURE>(moves, board);
-        stage = ms_stage::GoodCaptures;
 
-        // now score the captures
+        // Promotions are tactical moves even when they do not capture.
+        // Add them to the capture stage so they are searched before quiet moves.
+        Movelist quietPawnMoves;
+        movegen::legalmoves<movegen::MoveGenType::QUIET>(
+            quietPawnMoves, board, PieceGenType::PAWN);
+        for (Move move : quietPawnMoves) {
+            if (move.typeOf() == Move::PROMOTION)
+                moves.add(move);
+        }
+
+        stage = ms_stage::GoodNoisy;
+
+        // now score the captures and promotions
         for (size_t i = 0; i < moves.size(); i++) {
-            if (!StaticExchangeThresholded(board, moves[i], 0, pb)) {
+            if (!StaticExchangeThresholded(board, moves[i], seeThreshold, pb)) {
                 // give bad score, we will rescore later
                 moves[i].setScore(-1);
             } else {
-                moves[i].setScore(MVVValues[board.at(moves[i].to()).type()]
-                                           [board.at(moves[i].from()).type()]);
+                int16_t score = Move::PROMOTION == moves[i].typeOf()
+                    ? scorePromotion(board, moves[i])
+                    : MVVValues[board.at(moves[i].to()).type()]
+                               [board.at(moves[i].from()).type()];
+                moves[i].setScore(score);
             }
         }
     }
 
-    if (stage == ms_stage::GoodCaptures) {
+    if (stage == ms_stage::GoodNoisy) {
         // std::cout << "Good Captures" << std::endl;
         while (index < moves.size()) {
             size_t best_index = index;
@@ -189,7 +218,7 @@ Move move_select::next() {
             }
 
             if (moves[best_index].score() <= 0) {
-                stage = skip_quiets ? BadCaptures : ms_stage::GenQuiets;
+                stage = skip_quiets ? BadNoisy : ms_stage::GenQuiets;
                 break;
             } else {
                 std::swap(moves[index], moves[best_index]);
@@ -199,16 +228,22 @@ Move move_select::next() {
                 return moves[index - 1];
             }
         }
-        stage = skip_quiets ? BadCaptures : ms_stage::GenQuiets;
+        stage = skip_quiets ? BadNoisy : ms_stage::GenQuiets;
     }
 
     if (stage == ms_stage::GenQuiets) {
         // std::cout << "Gen Quiets" << std::endl;
         if (skip_quiets) {
-            stage = ms_stage::BadCaptures;
+            stage = ms_stage::BadNoisy;
             return next();
         }
-        movegen::legalmoves<movegen::MoveGenType::QUIET>(quietMoves, board);
+        Movelist generatedQuiets;
+        movegen::legalmoves<movegen::MoveGenType::QUIET>(generatedQuiets, board);
+        quietMoves.clear();
+        for (Move move : generatedQuiets) {
+            if (move.typeOf() != Move::PROMOTION)
+                quietMoves.add(move);
+        }
         stage = ms_stage::Quiets;
 
         for (size_t i = 0; i < quietMoves.size(); i++) {
@@ -230,7 +265,7 @@ Move move_select::next() {
     if (stage == ms_stage::Quiets) {
 
         if (skip_quiets) {
-            stage = ms_stage::BadCaptures;
+            stage = ms_stage::BadNoisy;
             return next();
         }
 
@@ -251,17 +286,21 @@ Move move_select::next() {
             return quietMoves[quiet_index - 1];
         }
 
-        stage = ms_stage::BadCaptures;
+        stage = ms_stage::BadNoisy;
     }
 
-    if (stage == ms_stage::BadCaptures) {
+    if (stage == ms_stage::BadNoisy) {
 
         // std::cout << "Bad Captures" << std::endl;
         // potentially rescore here
 
         for (size_t i = index; i < moves.size(); i++) {
-            moves[i].setScore(MVVValues[board.at(moves[i].to()).type()]
-                                       [board.at(moves[i].from()).type()]);
+            if (moves[i].typeOf() == Move::PROMOTION) {
+                moves[i].setScore(scorePromotion(board, moves[i]));
+            } else {
+                moves[i].setScore(MVVValues[board.at(moves[i].to()).type()]
+                                           [board.at(moves[i].from()).type()]);
+            }
         }
 
         while (index < moves.size()) {
