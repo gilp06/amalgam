@@ -124,9 +124,10 @@ move_select::move_select(const chess::Board &board,
                        std::optional<chess::Move> ttMove,
                        const history_heuristic_table *historyHeuristic,
                        bool skipQuiets,
-                       std::optional<std::array<chess::Move, 2>> killers)
+                       std::optional<std::array<chess::Move, 2>> killers,
+                       int16_t seeThreshold)
     : board(board), skip_quiets(skipQuiets), ttMove(ttMove), killers(killers),
-      historyHeuristic(historyHeuristic) {
+      historyHeuristic(historyHeuristic), seeThreshold(seeThreshold) {
 
     if (this->ttMove.has_value() && !board.isLegal(*this->ttMove)) {
         this->ttMove.reset();
@@ -137,8 +138,8 @@ move_select::move_select(const chess::Board &board,
     pb[(int)Color::BLACK] = fetchPinnersBlockers(board, Color::BLACK);
 
 
-    // skip TT move stage if it doesn't exist
-    if (!this->ttMove.has_value()) {
+    // skip TT move stage if it doesn't exist or if it is a quiet move and we are skipping quiets
+    if (!this->ttMove.has_value() || (skip_quiets && !board.isCapture(*this->ttMove))) {
         stage = ms_stage::GenCaptures;
     } else {
         stage = ms_stage::TTMove;
@@ -151,13 +152,9 @@ move_select::move_select(const chess::Board &board,
 Move move_select::next() {
 
     if (stage == ms_stage::TTMove) {
-        // std::cout << "TT Move" << std::endl;
         stage = ms_stage::GenCaptures;
         assert(ttMove.has_value());
-
-        if (!skip_quiets || board.isCapture(*ttMove)) {
-            return ttMove.value();
-        }
+        return ttMove.value();
     }
 
     if (stage == ms_stage::GenCaptures) {
@@ -167,7 +164,7 @@ Move move_select::next() {
 
         // now score the captures
         for (size_t i = 0; i < moves.size(); i++) {
-            if (!StaticExchangeThresholded(board, moves[i], 0, pb)) {
+            if (!StaticExchangeThresholded(board, moves[i], seeThreshold, pb)) {
                 // give bad score, we will rescore later
                 moves[i].setScore(-1);
             } else {

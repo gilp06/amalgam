@@ -29,8 +29,9 @@ class move_select {
     public:
         pb_struct pb[2];
         ms_stage stage;
+        int16_t seeThreshold;
         bool skip_quiets;
-        move_select(const chess::Board& board, std::optional<chess::Move> ttMove, const history_heuristic_table* historyHeuristic = nullptr, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt);
+        move_select(const chess::Board& board, std::optional<chess::Move> ttMove, const history_heuristic_table* historyHeuristic = nullptr, bool skipQuiets = false, std::optional<std::array<chess::Move, 2>> killers = std::nullopt, int16_t seeThreshold = 0);
         chess::Move next();
     private:
         chess::Movelist moves, quietMoves;

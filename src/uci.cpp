@@ -314,7 +314,7 @@ void bench() {
         globalstate gs = {chess::Board(fen), true, 0, false, false, 1, ttable};
 
         search_params params = {};
-        params.max_depth = 10;
+        params.max_depth = 13;
         gs.thread_stop = false;
         startSearch(&gs, &params, true); // run search in the main thread
 
