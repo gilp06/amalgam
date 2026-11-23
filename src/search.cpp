@@ -436,10 +436,10 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
             !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
             if (is_quiet) {
                 reductions +=
-                    (int16_t)(0.8 + log(played) * log(depth) / 2.5);
+                    (int16_t)(0.8 + log(played) * log(depth) / 1.5);
             } else {
                 reductions +=
-                    (int16_t)(0.4 + log(played) * log(depth) / 3.5);
+                    (int16_t)(0.4 + log(played) * log(depth) / 2.5);
             }
         }
 
