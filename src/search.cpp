@@ -93,6 +93,29 @@ void print_info_string(const thread_data& td) {
     std::cout << std::endl;
 }
 
+chess::Move defaultMove(const thread_data& td) {
+    // check if we have a tt-move
+    std::optional<TTable::Entry> probe =  td.gs->tt.probe(td.board.hash()); 
+
+    std::optional<chess::Move> tt_move = std::nullopt;
+
+    if (probe.has_value() && probe->best_move != Move::NO_MOVE) {
+        tt_move = probe->best_move;
+    }
+
+    move_select ms(td.gs->board, tt_move, &td.history_heuristic, false, td.killers[0], 0);
+
+    chess::Move produced = ms.next();
+
+    if (produced == Move::NO_MOVE) {
+        std::cerr << "tried getting default move when no moves were possible" << std::endl;
+        exit(1);
+    }
+
+    return produced;
+    
+}
+
 void startSearch(globalstate *gs, search_params *params, bool suppress_output) {
     tds.resize(gs->num_threads);
     gs->nodes_searched.store(0, std::memory_order_relaxed);
@@ -162,11 +185,30 @@ void startSearch(globalstate *gs, search_params *params, bool suppress_output) {
     if (!suppress_output) {
         print_info_string(tds[best_thread]);
 
+        // chess::Move ponder_move = tds[best_thread].final_pv_length > 1 ? tds[best_thread].final_pv[1] : Move::NO_MOVE;
+        chess::Move best_move = Move::NO_MOVE;
+        chess::Move ponder_move = Move::NO_MOVE;
+
+        if (tds[best_thread].final_pv_length > 0) {
+            best_move = tds[best_thread].final_pv[0];
+        }
+
+        if (best_move == Move::NO_MOVE || !gs->board.isLegal(best_move)) {
+            // not sure how this happened, fall back to default move
+            
+            best_move = defaultMove(tds[best_thread]);
+        }
+
+        if (tds[best_thread].final_pv_length > 1) {
+            ponder_move = tds[best_thread].final_pv[1];
+        }
+        
+
         std::cout << "bestmove "
-                  << uci::moveToUci(tds[best_thread].final_pv[0], tds[best_thread].board.chess960());
+                  << uci::moveToUci(best_move, tds[best_thread].board.chess960());
         if (tds[best_thread].final_pv_length > 1) {
             std::cout << " ponder "
-                      << uci::moveToUci(tds[best_thread].final_pv[1], tds[best_thread].board.chess960());
+                      << uci::moveToUci(ponder_move, tds[best_thread].board.chess960());
         }
         std::cout << std::endl;
     }
