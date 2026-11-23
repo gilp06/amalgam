@@ -250,10 +250,10 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
             }
         }
 
-        if (mate != INT16_MAX) {
-            td.gs->thread_stop.store(true, std::memory_order_relaxed);
-            break;
-        }
+        // if (mate != INT16_MAX) {
+        //     td.gs->thread_stop.store(true, std::memory_order_relaxed);
+        //     break;
+        // }
     }
 }
 
