@@ -321,7 +321,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         return evaluate(td, ply);
     }
 
-    int16_t static_eval = evaluate(td, ply);
+    
 
     int16_t alpha_orig = alpha;
     td.pv_lengths[ply] = 0;
@@ -357,6 +357,11 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     }
 
     bool in_check = td.board.inCheck();
+
+    int16_t static_eval = evaluate(td, ply);
+    td.ss[ply].static_eval = in_check ? INT16_MIN : static_eval;
+    bool improving = ply >= 2 && !in_check && static_eval > td.ss[ply - 2].static_eval;
+
     bool can_prune = !in_check && !is_root && !is_pv;
 
     if (can_prune) {
@@ -429,21 +434,24 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
             quietMoves[quietCount++] = m;
         }
 
-        int reductions = 0;
+        double lmr_reductions = 0;
 
         // Late Move Reductions
         if (played >= 3 && depth >= 3 && !in_check && !is_checking &&
             !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
             if (is_quiet) {
-                reductions +=
-                    (int16_t)(0.8 + log(played) * log(depth) / 1.5);
+                lmr_reductions +=
+                    (0.8 + log(played) * log(depth) / 1.5);
             } else {
-                reductions +=
-                    (int16_t)(0.4 + log(played) * log(depth) / 2.5);
+                lmr_reductions +=
+                    (0.4 + log(played) * log(depth) / 2.5);
             }
+            lmr_reductions += 0.8 * !improving;
         }
+    
+        int16_t actual_lmr = (int16_t) lmr_reductions;
 
-        int16_t reduced_depth = depth - reductions;
+        int16_t reduced_depth = depth - actual_lmr;
 
         // Pruning 
         // We should never prune while within a PV, or in check/being mated
@@ -477,7 +485,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         } else {
             score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions, ply + 1, true);
 
-            if (score > alpha && reductions > 0) {
+            if (score > alpha && actual_lmr > 0) {
                 // we should probably research from a full depth if this went bad (minus the root reductions)
                 if (score < CHECKMATE - MAX_PLY) {
                     score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1 - root_reductions, ply + 1, !cut_node);
@@ -485,7 +493,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
             }
 
             if (score > alpha && score < beta){
-                score = -alphabeta<PV_NODE>(td, -beta, -alpha, reduced_depth - 1 - root_reductions, ply + 1, false);
+                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1 - root_reductions, ply + 1, false);
             }
         }
 
