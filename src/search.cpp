@@ -392,7 +392,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         }
 
         // Reverse Futility Pruning
-        if (depth <= 3 && static_eval >= beta + 100 * depth) {
+        if (depth <= 8 && static_eval >= beta + 100 * std::max(0, depth-improving) && static_eval) {
             return beta + (static_eval - beta) / 4;
         }
     }
