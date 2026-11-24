@@ -22,6 +22,7 @@ enum nodetype {
 
 struct sstack_data {
     Accumulator accums[2];
+    int16_t static_eval;
 };
 
 struct thread_data {
