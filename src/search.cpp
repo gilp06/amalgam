@@ -371,7 +371,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     if (can_prune) {
 
         // Null Move Pruning
-        if (allow_null && cut_node && depth >= 3 && static_eval + improving * 120 >= beta &&
+        if (allow_null && depth >= 3 && static_eval + improving * 120 >= beta &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
             int reduction = 4.0 + depth / 3.0;
 
@@ -382,7 +382,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
             td.board.makeNullMove();
             int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1,
-                                               depth - 1 - reduction, ply + 1, false, false);
+                                               depth - 1 - reduction, ply + 1, !cut_node, false);
             td.board.unmakeNullMove();
 
             // If we need to abort
