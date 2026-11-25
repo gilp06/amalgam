@@ -371,11 +371,9 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     if (can_prune) {
 
         // Null Move Pruning
-        int16_t nmp_margin = std::max(0, 200 - (improving * -40) + (depth * -10));
-
-        if (allow_null && depth >= 3 && static_eval >= beta + nmp_margin &&
+        if (allow_null && depth >= 3 && static_eval >= beta  &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
-            int reduction = 4.0 + depth / 3.0;
+            int reduction = 4.0 + depth / 3.0 + improving;
 
             // we don't need to update the accumulators
             // so we just copy them over to the next ply
