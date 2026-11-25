@@ -330,6 +330,10 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         td.seldepth = ply;
     }
 
+    if (depth == 0) {
+        return quiescence(td, alpha, beta, ply);
+    }
+
     if (td.board.isHalfMoveDraw() || td.board.isRepetition(2) ||
         td.board.isInsufficientMaterial()) {
         return 0;
@@ -396,11 +400,6 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
             return beta + (static_eval - beta) / 4;
         }
     }
-
-    if (depth == 0) {
-        return quiescence(td, alpha, beta, ply);
-    }
-
 
     // Interal Iterative Reduction
     // if we don't have a hash move while being this deep, we should have found one by this point.
