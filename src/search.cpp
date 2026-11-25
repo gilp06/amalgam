@@ -371,7 +371,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     if (can_prune) {
 
         // Null Move Pruning
-        if (allow_null && depth >= 3 && static_eval + improving * 120 >= beta &&
+        if (allow_null && depth >= 3 && static_eval + (improving * 120) + (-10 * depth) >= beta &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
             int reduction = 4.0 + depth / 3.0;
 
@@ -390,8 +390,9 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                 return 0;
             }
 
+            // Don't report bad mates
             if (score >= beta) {
-                return score;
+                return (score >= CHECKMATE - MAX_PLY) ? beta : score;
             }
         }
 
