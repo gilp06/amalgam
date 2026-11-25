@@ -371,7 +371,9 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     if (can_prune) {
 
         // Null Move Pruning
-        if (allow_null && depth >= 3 && static_eval + (improving * 120) + (-10 * depth) >= beta &&
+        int16_t nmp_margin = std::max(0, 200 - (improving * -40) + (depth * -10));
+
+        if (allow_null && depth >= 3 && static_eval >= beta + nmp_margin &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
             int reduction = 4.0 + depth / 3.0;
 
@@ -382,7 +384,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
             td.board.makeNullMove();
             int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1,
-                                               depth - 1 - reduction, ply + 1, !cut_node, false);
+                                               depth - 1 - reduction, ply + 1, !cut_node, true);
             td.board.unmakeNullMove();
 
             // If we need to abort
@@ -390,9 +392,15 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                 return 0;
             }
 
-            // Don't report bad mates
             if (score >= beta) {
-                return (score >= CHECKMATE - MAX_PLY) ? beta : score;
+                if (depth <= 12 && beta < CHECKMATE - MAX_PLY)
+                    return (score >= CHECKMATE - MAX_PLY) ? beta : score;
+
+                // otherwise verify with a normal search 
+                int16_t verification = -alphabeta<NORMAL>(td, -beta, -beta + 1, depth - 1 - reduction, ply + 1, !cut_node, false);
+                if (verification >= beta) {
+                    return verification;
+                }
             }
         }
 
