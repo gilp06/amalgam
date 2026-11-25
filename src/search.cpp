@@ -301,7 +301,7 @@ void search(std::reference_wrapper<thread_data> td_ref, bool main, bool suppress
 
 template <nodetype node>
 int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
-                  int16_t ply, bool cut_node) {
+                  int16_t ply, bool cut_node, bool allow_null) {
 
     if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
         return 0;
@@ -371,7 +371,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     if (can_prune) {
 
         // Null Move Pruning
-        if (depth >= 3 && static_eval + depth * 100 > beta &&
+        if (allow_null && cut_node && depth >= 3 && static_eval + improving * 120 >= beta &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
             int reduction = 4.0 + depth / 3.0;
 
@@ -382,7 +382,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
             td.board.makeNullMove();
             int16_t score = -alphabeta<NORMAL>(td, -beta, -beta + 1,
-                                               depth - 1 - reduction, ply + 1, false);
+                                               depth - 1 - reduction, ply + 1, false, false);
             td.board.unmakeNullMove();
 
             // If we need to abort

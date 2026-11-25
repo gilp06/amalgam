@@ -15,7 +15,6 @@
 
 enum nodetype {
     PV_NODE,
-    NULL_MOVE,
     NORMAL
 };
 
@@ -68,5 +67,5 @@ void performMove(thread_data& td, chess::Move move, sstack_data* ss);
 int16_t evaluate(thread_data& td, int16_t ply);
 
 template<nodetype node>
-int16_t alphabeta(thread_data& td, int16_t alpha, int16_t beta, int16_t depth, int16_t ply, bool cut_node);
+int16_t alphabeta(thread_data& td, int16_t alpha, int16_t beta, int16_t depth, int16_t ply, bool cut_node, bool allow_null=true);
 int16_t quiescence(thread_data& td, int16_t alpha, int16_t beta, int16_t ply);
