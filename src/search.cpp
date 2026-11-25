@@ -370,6 +370,11 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
     if (can_prune) {
 
+        // Reverse Futility Pruning
+        if (depth <= 8 && static_eval - 100 * std::max(0, depth-improving) >= beta) {
+            return beta + (static_eval - beta) / 4;
+        }
+
         // Null Move Pruning
         if (allow_null && depth >= 3 && static_eval >= beta  &&
             td.board.hasNonPawnMaterial(td.board.sideToMove())) {
@@ -400,11 +405,6 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                     return verification;
                 }
             }
-        }
-
-        // Reverse Futility Pruning
-        if (depth <= 8 && static_eval - 100 * std::max(0, depth-improving) >= beta) {
-            return beta + (static_eval - beta) / 4;
         }
     }
 
