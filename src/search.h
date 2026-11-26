@@ -21,7 +21,8 @@ enum nodetype {
 
 struct sstack_data {
     Accumulator accums[2];
-    int16_t static_eval;
+    int16_t static_eval = INT16_MIN;
+    std::optional<chess::Move> excluded = std::nullopt;
 };
 
 struct thread_data {

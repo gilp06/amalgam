@@ -316,12 +316,11 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     depth = MAX(0, depth);
     bool is_pv = (node == PV_NODE);
     bool is_root = (ply == 0);
+    std::optional<chess::Move> excluded = td.ss[ply].excluded;
 
     if (ply >= MAX_PLY - 1) {
         return evaluate(td, ply);
     }
-
-    
 
     int16_t alpha_orig = alpha;
     td.pv_lengths[ply] = 0;
@@ -346,8 +345,13 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
     if (probe.has_value()) {
         probe->score = scoreFromTT(probe->score, ply);
+        
+        if (probe->best_move != Move::NO_MOVE) {
+            tt_move = probe->best_move;
+        }
+            
 
-        if (!is_root && probe->depth >= depth && (depth == 0 || !is_pv)) {
+        if (!excluded.has_value() && !is_root && probe->depth >= depth && (depth == 0 || !is_pv)) {
             if (probe->bd == TTable::EXACT) {
                 return probe->score;
             } else if (probe->bd == TTable::LOWER && probe->score >= beta) {
@@ -356,8 +360,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                 return probe->score;
             }
         }
-        if (probe->best_move != Move::NO_MOVE)
-            tt_move = probe->best_move;
+        
     }
 
     bool in_check = td.board.inCheck();
@@ -366,7 +369,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     td.ss[ply].static_eval = in_check ? INT16_MIN : static_eval;
     bool improving = ply >= 2 && !in_check && static_eval > td.ss[ply - 2].static_eval;
 
-    bool can_prune = !in_check && !is_root && !is_pv;
+    bool can_prune = !in_check && !is_root && !is_pv && !excluded.has_value();
 
     if (can_prune) {
 
@@ -418,7 +421,37 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     std::array<Move, 256> quietMoves;
     size_t quietCount = 0;
 
-    
+    // Singular extension
+    int16_t s_extensions = 0;
+    if (!is_root && tt_move.has_value() && !excluded.has_value() && abs(probe->score) < CHECKMATE - MAX_PLY && probe->bd == TTable::Bound::LOWER && probe->depth >= depth - 3 && ply < td.completed_depth * 2) {
+        int16_t s_reduced_beta = probe->score - (depth * 3) / 4;
+        int16_t s_depth_reduction = (depth-1) / 2;
+
+        bool is_capture = td.board.isCapture(*tt_move);
+        bool is_quiet = !is_capture && (*tt_move).typeOf() != Move::PROMOTION;
+
+        td.ss[ply].excluded = tt_move.value();
+        int16_t s_score = alphabeta<NORMAL>(td, s_reduced_beta - 1, s_reduced_beta, s_depth_reduction, ply, cut_node, allow_null);
+        td.ss[ply].excluded = std::nullopt;
+
+        if (td.gs->thread_stop.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+        
+        if (s_score == INT16_MIN) {
+            // extend anyways if only legal move
+            s_extensions = 1;
+        } else if (s_score < s_reduced_beta) {
+            if (!is_pv && s_score < s_reduced_beta - 400) {
+                s_extensions = 2 + (is_quiet && s_score < s_reduced_beta - 650);
+            } else {
+                s_extensions = 1;
+            }
+        } else if (!is_pv && s_score >= beta) {
+            return s_score;
+        }
+    }
+
     int16_t see_quiet = -40 * depth;
     int16_t see_noisy = -20 * depth * depth;
 
@@ -427,6 +460,10 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         if (ms.stage == ms_stage::Done)
             break;
         assert(m != Move::NO_MOVE);
+
+        if (excluded.has_value() && m == excluded.value()) {
+            continue;
+        }
         
 
         bool is_capture = td.board.isCapture(m);
@@ -435,7 +472,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
         if (is_quiet) {
             quietMoves[quietCount++] = m;
-        }
+        }        
 
         double lmr_reductions = 0;
 
@@ -455,6 +492,9 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         int16_t actual_lmr = (int16_t) lmr_reductions;
 
         int16_t reduced_depth = depth - actual_lmr;
+
+        int16_t extensions = m == tt_move ? s_extensions : 0;
+
 
         // Pruning 
         // We should never prune while within a PV, or in check/being mated
@@ -486,19 +526,20 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
         if (played == 1) {
             // We assume the first move is the best move
-            score = -alphabeta<node>(td, -beta, -alpha, depth - 1 - root_reductions, ply + 1, !is_pv && !cut_node);
+            // extend on TT-move
+            score = -alphabeta<node>(td, -beta, -alpha, depth + extensions - 1 - root_reductions, ply + 1, !is_pv && !cut_node);
         } else {
-            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth - 1 - root_reductions, ply + 1, true);
+            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth + extensions - 1 - root_reductions, ply + 1, true);
 
             if (score > alpha && actual_lmr > 0) {
                 // we should probably research from a full depth if this went bad (minus the root reductions)
                 if (score < CHECKMATE - MAX_PLY) {
-                    score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth - 1 - root_reductions, ply + 1, !cut_node);
+                    score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth + extensions - 1 - root_reductions, ply + 1, !cut_node);
                 }
             }
 
             if (score > alpha && score < beta){
-                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth - 1 - root_reductions, ply + 1, false);
+                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth + extensions - 1 - root_reductions, ply + 1, false);
             }
         }
 
@@ -549,6 +590,12 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     }
 
     if (played == 0) {
+        if (excluded.has_value()) 
+        {
+            // we banned potentially the only legal move
+            return INT16_MIN;
+        }
+
         if (td.board.inCheck()) {
             best_score = -CHECKMATE + ply;
         } else {
@@ -556,7 +603,8 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         }
     }
 
-    if (ply != 0) {
+    // don't store into tt singular search results
+    if (ply != 0 && !excluded.has_value()) {
         TTable::Entry entry;
         entry.depth = depth;
         entry.best_move =
