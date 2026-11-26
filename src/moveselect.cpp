@@ -77,7 +77,6 @@ bool StaticExchangeThresholded(const chess::Board &board, chess::Move move,
     Color stm = board.sideToMove();
     Bitboard attackers = attackers_to_square(board, to, occupied);
     Bitboard stmAttackers, bb;
-    Bitboard pinners[2] = {0, 0};
 
     // generate pinned rays
 

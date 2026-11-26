@@ -27,8 +27,8 @@ void initLookup() {
 Bitboard attackers_to_square(const Board& board, Square square, Bitboard occupied) {
     const auto queens   = board.pieces(PieceType::QUEEN);
 
-    auto atks = (attacks::pawn(Color::WHITE, square) & board.pieces(PieceType::PAWN, Color::WHITE));
-    atks |= (attacks::pawn(Color::BLACK, square) & board.pieces(PieceType::PAWN, Color::BLACK));
+    auto atks = (attacks::pawn(Color::WHITE, square) & board.pieces(PieceType::PAWN, Color::BLACK));
+    atks |= (attacks::pawn(Color::BLACK, square) & board.pieces(PieceType::PAWN, Color::WHITE));
     atks |= (attacks::knight(square) & board.pieces(PieceType::KNIGHT));
     atks |= (attacks::bishop(square, occupied) & (board.pieces(PieceType::BISHOP) | queens));
     atks |= (attacks::rook(square, occupied) & (board.pieces(PieceType::ROOK) | queens));

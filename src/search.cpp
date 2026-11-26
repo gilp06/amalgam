@@ -629,7 +629,7 @@ int16_t quiescence(thread_data &td, int16_t alpha, int16_t beta, int16_t ply) {
         }
     }
 
-    move_select ms(td.board, tt_move, nullptr, !incheck, std::nullopt, -100);
+    move_select ms(td.board, tt_move, nullptr, !incheck, std::nullopt, -80);
     int16_t played = 0;
 
     while (true) {
