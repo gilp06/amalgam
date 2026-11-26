@@ -6,7 +6,7 @@ Currently, to build/run it you will need a processor that supports PEXT and AVX-
 
 # Search
 
-Fail-soft AB-pruning engine with the following techniques implemented and tested so far
+Fail-soft AB-pruning engine with the following techniques implemented and tested
 - Iterative Deepening with aspiration windows
 - Quiescence Search
 - Move Ordering
@@ -20,8 +20,9 @@ Fail-soft AB-pruning engine with the following techniques implemented and tested
     - Bad Captures
 - Principal Variation search
 - Lazy SMP and thread voting
-- RFP, NMP, IIR
+- RFP, NMP, IIR, SEE pruning, Multicut pruning
 - LMR, LMP, FP
+- Singular extensions
 - Improving heuristic on some of the others.
 
 The time management soft limit is currently updated per depth based on PV stability
@@ -32,7 +33,8 @@ The time management soft limit is currently updated per depth based on PV stabil
 The NNUE development on this engine is pretty similar to my previous one.
 
 - led-base-1024: (768->1024)x2->1, trained on the WDL of the Lichess Elite Database, with roughly 1.8B unique positions. I chose to do this as I had read that the Viridithas dev used this for the initial network (albeit rescored by HCE), and that it produced a more aggressive engine, so I was curious if even the WDL would do something similar.
-- datagen-v1-256: (768->256)x2->1, trained on 2M selfplay games using led-base-1024 with 8 plies of random moves at the start and 5k softnodes
+- datagen-v1-256: (768->256)x2->1, trained on eval of 2M selfplay games using led-base-1024 with 8 plies of random moves at the start and 5k softnodes
+- datagen-v2-256: (768->256)x2->1, similar to above but with an additional 2M selfplay games.
 
 # References
 - [OpenBench](https://github.com/AndyGrant/OpenBench) - Used for a lot; i.e. SPRT and selfplay PGN generation.
