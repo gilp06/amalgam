@@ -16,13 +16,16 @@ time_manager::time_manager(const search_params& params, chess::Color us) {
 
     if (params.wtime != 0 || params.btime != 0 || params.winc != 0 || params.binc != 0) {
         tournament_limit_exists = true;
+        std::optional<uint64_t> moves_to_go = std::nullopt;
+        if (params.moves_to_go != 0) 
+            moves_to_go = params.moves_to_go;
         if (us == chess::Color::WHITE) {
             ls.push_back(limits::tournament{
                 params.wtime,
                 params.btime,
                 params.winc,
                 params.binc,
-                std::nullopt
+                moves_to_go
             });
         } else {
             ls.push_back(limits::tournament{
@@ -30,7 +33,7 @@ time_manager::time_manager(const search_params& params, chess::Color us) {
                 params.wtime,
                 params.binc,
                 params.winc,
-                std::nullopt
+                moves_to_go
             });
         }
     }
@@ -125,7 +128,9 @@ void time_manager::compute_potential_bounds() {
     if (tournament_limit.has_value()) {
         hard_limit_time = (tournament_limit->our_time * 60) / 100;
 
-        opt_limit_time = tournament_limit->our_time / 20 + tournament_limit->our_inc / 2;
+        size_t move_count = tournament_limit->moves_to_go.has_value() ? tournament_limit->moves_to_go.value() : 20;
+
+        opt_limit_time = tournament_limit->our_time / move_count + tournament_limit->our_inc / 2;
         opt_limit_time = std::min(opt_limit_time, hard_limit_time);
 
         soft_limit_time = opt_limit_time;

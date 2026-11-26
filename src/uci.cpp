@@ -125,6 +125,8 @@ bool UCICommand(globalstate *gs, const std::string &input) {
                 toks >> params.binc;
             } else if (token == "movetime") {
                 toks >> params.movetime;
+            } else if (token == "movestogo") {
+                toks >> params.moves_to_go;
             }
         }
 

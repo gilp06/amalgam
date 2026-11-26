@@ -15,6 +15,8 @@ struct search_params {
     uint64_t binc = 0;
     uint64_t movetime = 0;
 
+    uint64_t moves_to_go = 0;
+
     bool softnodes = false;
 };
 
