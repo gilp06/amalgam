@@ -418,6 +418,10 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     std::array<Move, 256> quietMoves;
     size_t quietCount = 0;
 
+    
+    int16_t see_quiet = -40 * depth;
+    int16_t see_noisy = -20 * depth * depth;
+
     while (true) {
         Move m = ms.next();
         if (ms.stage == ms_stage::Done)
@@ -462,16 +466,18 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                 ms.skip_quiets = true;
             }
 
-
             // Futility Pruning
             int16_t futility_margin = 80 + 100 * depth;
             // don't prune if the move gives check
             if (is_quiet && reduced_depth < 12 && static_eval + futility_margin <= alpha && !is_checking) {
                 ms.skip_quiets = true;
             }
+
+            if (ms.stage > ms_stage::GoodNoisy && !StaticExchangeThresholded(td.board, m, is_quiet ? see_quiet : see_noisy, ms.pb)) {
+                continue;
+            }
         }
 
-         
 
         performMove(td, m, &td.ss[ply]);
         played++;
