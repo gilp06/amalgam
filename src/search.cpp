@@ -423,7 +423,7 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
     // Singular extension
     int16_t s_extensions = 0;
-    if (!is_root && tt_move.has_value() && !excluded.has_value() && abs(probe->score) < CHECKMATE - MAX_PLY && probe->bd == TTable::Bound::LOWER && probe->depth >= depth - 3 && ply < td.completed_depth * 2) {
+    if (!is_root && tt_move.has_value() && depth >= 6 && !excluded.has_value() && abs(probe->score) < CHECKMATE - MAX_PLY && probe->bd == TTable::Bound::LOWER && probe->depth >= depth - 3 && ply < td.completed_depth * 2) {
         int16_t s_reduced_beta = probe->score - (depth * 3) / 4;
         int16_t s_depth_reduction = (depth-1) / 2;
 
@@ -448,7 +448,12 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
                 s_extensions = 1;
             }
         } else if (!is_pv && s_score >= beta) {
+            // multicut
             return s_score;
+        } else if (probe->score >= beta) {
+            s_extensions = -3 + is_pv;
+        } else if (cut_node) {
+            s_extensions = -2;
         }
     }
 
