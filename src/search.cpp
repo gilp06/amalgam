@@ -407,9 +407,8 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
     // Interal Iterative Reduction
     // if we don't have a hash move while being this deep, we should have found one by this point.
     // So reduce the depth since this is unlikely to be good move.
-    int root_reductions = 0;
-    if (depth >= 8 && (is_pv || cut_node) && (!probe.has_value() || (!tt_move.has_value() || probe->depth + 4 < depth))) {
-        root_reductions += 1;
+    if (depth >= 8 && !excluded.has_value() && (is_pv || cut_node) && (!probe.has_value() || (!tt_move.has_value() || probe->depth + 4 < depth))) {
+        depth -= 1;
     }
 
 
@@ -481,23 +480,29 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
 
         double lmr_reductions = 0;
 
-        // Late Move Reductions
-        if (played >= 3 && depth >= 3 && !in_check && !is_checking &&
-            !is_pv && m != td.killers[ply][0] && m != td.killers[ply][1]) {
+        if (depth >= 3 && played >= 2) {
             if (is_quiet) {
                 lmr_reductions +=
-                    (0.8 + log(played) * log(depth) / 1.5);
+                    (0.8 + log(played) * log(depth) / 2.5);
             } else {
                 lmr_reductions +=
-                    (0.4 + log(played) * log(depth) / 2.5);
+                    (0.3 + log(played) * log(depth) / 3.5);
             }
-            lmr_reductions += 0.8 * !improving;
+
+            lmr_reductions += 0.2 * !improving;
+            lmr_reductions += 1.2 * cut_node;
+            lmr_reductions += 0.3 * !is_pv;
+            lmr_reductions -= 0.6 * (m == td.killers[ply][0] || m == td.killers[ply][1]);
+            lmr_reductions -= 1.2 * is_checking;
         }
+        
     
         int16_t actual_lmr = (int16_t) lmr_reductions;
+        if (actual_lmr < 0) {
+            actual_lmr = 0;
+        }
 
         int16_t reduced_depth = depth - actual_lmr;
-
         int16_t extensions = m == tt_move ? s_extensions : 0;
 
 
@@ -532,19 +537,19 @@ int16_t alphabeta(thread_data &td, int16_t alpha, int16_t beta, int16_t depth,
         if (played == 1) {
             // We assume the first move is the best move
             // extend on TT-move
-            score = -alphabeta<node>(td, -beta, -alpha, depth + extensions - 1 - root_reductions, ply + 1, !is_pv && !cut_node);
+            score = -alphabeta<node>(td, -beta, -alpha, depth + extensions - 1, ply + 1, !is_pv && !cut_node);
         } else {
-            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth + extensions - 1 - root_reductions, ply + 1, true);
+            score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, reduced_depth + extensions - 1, ply + 1, true);
 
             if (score > alpha && actual_lmr > 0) {
                 // we should probably research from a full depth if this went bad (minus the root reductions)
                 if (score < CHECKMATE - MAX_PLY) {
-                    score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth + extensions - 1 - root_reductions, ply + 1, !cut_node);
+                    score = -alphabeta<NORMAL>(td, -alpha - 1, -alpha, depth + extensions - 1, ply + 1, !cut_node);
                 }
             }
 
             if (score > alpha && score < beta){
-                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth + extensions - 1 - root_reductions, ply + 1, false);
+                score = -alphabeta<PV_NODE>(td, -beta, -alpha, depth + extensions - 1, ply + 1, false);
             }
         }
 
